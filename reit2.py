@@ -137,8 +137,15 @@ class Spread:
         capex = strip(self.cashflow.match_title('Acquisition of Real Estate Assets'))
         affo = list_add_list(cfo, capex)
         affo_per_share = list(map(lambda f: f / self.share_out_filing(), affo))
-        print("AFFO per share average {:.4f} for: {}".format(
-            average(affo_per_share),
+
+        # Based on IGBREIT 2021 annual: "term period" between 5.85% to 6.85%. Take the mid point.
+        irr = .0635
+        term_period = 0
+        for i, a in enumerate(affo):
+            term_period += a/(1+irr)**(i+1)
+        # print("XXX", term_period, term_period/self.share_out_filing())
+        print("AFFO per share at IRR {:.4f} for: {}".format(
+            term_period/self.share_out_filing(),
             list(map(lambda x: round(x, 4), affo_per_share))
         ))
 
@@ -228,7 +235,7 @@ def main():
                'twrreit', 'ahp', 'kipreit']
 
     # tickers = [ 'atrium']
-    tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ahp']
+    # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ahp']
     for c in tickers:
         print('Ticker {}'.format(c))
         wb = load_workbook(path+'/' + c + '.xlsx')
@@ -240,8 +247,8 @@ def main():
         t.return_equity()
         t.net_debt_over_ebit()
         t.retained_earnings()
-        t.dividend_payout_ratio()
         t.ebit_margin()
+        t.dividend_payout_ratio()
         print()
 
 
