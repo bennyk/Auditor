@@ -209,12 +209,19 @@ class Spread:
                 print("W: {} does not provide dividend in year '{}".format(
                     self.tick, self.start_year+i))
         income = strip(self.income.match_title('Net Income'))
+
+        # Op income is a probable replacement in the event when regular income produce negative number.
+        op_income = strip(self.income.match_title('Operating Income'))
+        net_income = []
         for i, a in enumerate(income):
             if a < 0:
                 print("W: {} negative income {} in year '{}".format(
                     self.tick, a, self.start_year+i))
+                net_income.append(op_income[i])
+            else:
+                net_income.append(income[i])
 
-        div_payout_ratio = list_over_list(div_paid, income)
+        div_payout_ratio = list_over_list(div_paid, net_income)
         print("Dividend payout ratio at average {:.2f} ratio for: {}".format(
             average(div_payout_ratio),
             list(map(lambda x: round(x, 2), div_payout_ratio))
@@ -235,6 +242,8 @@ def main():
                'twrreit', 'ahp', 'kipreit']
 
     # tickers = [ 'atrium']
+    # tickers = [ 'clmt']
+    tickers = [ 'axreit']
     # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ahp']
     for c in tickers:
         print('Ticker {}'.format(c))
