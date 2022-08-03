@@ -136,16 +136,22 @@ class Spread:
         # Capex for real estates
         capex = strip(self.cashflow.match_title('Acquisition of Real Estate Assets'))
         affo = list_add_list(cfo, capex)
-        affo_per_share = list(map(lambda f: f / self.share_out_filing(), affo))
+
+        # TODO made comparison in relation to IGBREIT's share out filing
+        # share_out_filing = self.share_out_filing()
+        share_out_filing = 3600
+        affo_per_share = list(map(lambda f: f / share_out_filing, affo))
 
         # Based on IGBREIT 2021 annual: "term period" between 5.85% to 6.85%. Take the mid point.
         irr = .0635
         term_period = 0
-        for i, a in enumerate(affo):
+
+        # reversed - Simulate in reversed order from current to far past year.
+        for i, a in enumerate(reversed(affo)):
             term_period += a/(1+irr)**(i+1)
         # print("XXX", term_period, term_period/self.share_out_filing())
-        print("AFFO per share at IRR {:.4f} for: {}".format(
-            term_period/self.share_out_filing(),
+        print("AFFO in relation to IGBREIT, at IRR {:.4f} for: {}".format(
+            term_period/share_out_filing,
             list(map(lambda x: round(x, 4), affo_per_share))
         ))
 
@@ -243,7 +249,7 @@ def main():
 
     # tickers = [ 'atrium']
     # tickers = [ 'clmt']
-    tickers = [ 'axreit']
+    # tickers = [ 'axreit']
     # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ahp']
     for c in tickers:
         print('Ticker {}'.format(c))
