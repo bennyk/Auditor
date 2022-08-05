@@ -1,5 +1,7 @@
 from openpyxl import load_workbook, Workbook
-from typing import List
+from typing import List, Tuple
+from collections import OrderedDict, namedtuple
+from enum import Enum
 import re
 
 max_row = max_col = 99
@@ -13,8 +15,12 @@ def colnum_string(n):
     return string
 
 
-def average(l: [float]):
+def striped_average(l: [float]):
     l = strip(l)
+    return sum(l) / len(l)
+
+
+def average(l: [float]):
     return sum(l) / len(l)
 
 
@@ -82,8 +88,9 @@ class Table:
 
 
 class Spread:
-    def __init__(self, wb, tick):
+    def __init__(self, wb, tick, prof: 'Prof'):
         self.tick = tick
+        self.profiler = prof
         self.tabs = []
         self.income = None
         self.balance = None
@@ -112,13 +119,15 @@ class Spread:
 
     def revenue(self):
         revs = strip(self.income.match_title('Total Revenues'))
-        revs_per_share = cagr(list(map(lambda f: f / self.share_out_filing(), revs)))
+        rev_per_share = cagr(list(map(lambda f: f / self.share_out_filing(), revs)))
         print("Revenue per share from {} to {} at CAGR {:.2f}% for: {}".format(
             revs[0], revs[-1],
-            revs_per_share * 100, revs))
-        if abs(cagr(revs) - revs_per_share) > .01:
+            rev_per_share * 100, revs))
+        if abs(cagr(revs) - rev_per_share) > .01:
             print("   Revenue {:.2f} in percent vs {:.2f} on per share basis".format(
-                cagr(revs) * 100, revs_per_share * 100))
+                rev_per_share * 100, rev_per_share * 100))
+
+        self.profiler.collect(rev_per_share, Tag.rev_per_share, ProfMethod.CAGR)
 
     def cfo(self):
         # aka FFO - Funds from Operations
@@ -129,7 +138,8 @@ class Spread:
             cfo_per_share * 100, cfo))
         if abs(cagr(cfo) - cfo_per_share) > .01:
             print("   FCF {:.2f} in percent vs {:.2f} on per share basis".format(
-                cagr(cfo) * 100, cfo_per_share * 100))
+                cfo_per_share*100, cfo_per_share * 100))
+        self.profiler.collect(cfo_per_share, 'cfo_per_share', ProfMethod.CAGR)
 
     def affo(self):
         cfo = strip(self.cashflow.match_title('Cash from Operations'))
@@ -150,47 +160,58 @@ class Spread:
         for i, a in enumerate(reversed(affo)):
             term_period += a/(1+irr)**(i+1)
         # print("XXX", term_period, term_period/self.share_out_filing())
+        avg_term_period_over_shares = term_period / share_out_filing
         print("AFFO in relation to IGBREIT, at IRR {:.4f} for: {}".format(
-            term_period/share_out_filing,
+            avg_term_period_over_shares,
             list(map(lambda x: round(x, 4), affo_per_share))
         ))
+        self.profiler.collect(avg_term_period_over_shares, 'affo', ProfMethod.IRR)
 
     def nav(self):
         total_asset = strip(self.balance.match_title('Total Assets'))
         total_liab = strip(self.balance.match_title('Total Liabilities'))
         nav = list_minus_list(total_asset, total_liab)
         nav_per_share = list(map(lambda f: f / self.share_out_filing(), nav))
+        avg_nav_per_share = cagr(nav_per_share)
         print("NAV per share at CAGR {:.2f}% for: {}".format(
-            cagr(nav_per_share)*100,
+            avg_nav_per_share*100,
             list(map(lambda x: round(x, 4), nav_per_share)),
         ))
+        self.profiler.collect(avg_nav_per_share, 'nav_per_share', ProfMethod.CAGR)
 
     def return_equity(self):
         net_income = strip(self.income.match_title('Net Income$'))
         requity = strip(self.balance.match_title('Total Common Equity$'))
         roce = list_over_list(net_income, requity, percent=True)
+        avg_roce = striped_average(roce)
         print("Return on Common Equity average {:.2f}% for: {}".format(
-            average(roce),
+            avg_roce,
             list(map(lambda x: round(x, 2), roce))
         ))
+        self.profiler.collect(avg_roce, 'ROCE', ProfMethod.AveragePerc)
 
     def net_debt_over_ebit(self):
         net_debt = strip(self.balance.match_title('Net Debt'))
         ebit = strip(self.income.match_title('Operating Income$'))
         # ebitda = self.match_title('EBITDA$')
+        net_debt_over_ebit = list_over_list(net_debt, ebit)
+        avg_net_debt_over_ebit = striped_average(net_debt_over_ebit)
         print("Net debt over EBIT average {:.2f} years for: {}".format(
-            average(list_over_list(net_debt, ebit)),
-            list(map(lambda x: round(x, 2), list_over_list(net_debt, ebit)))
+            avg_net_debt_over_ebit,
+            list(map(lambda x: round(x, 2), net_debt_over_ebit))
         ))
+        self.profiler.collect(avg_net_debt_over_ebit, 'net_debt_over_ebit', ProfMethod.AverageYears)
 
     def ebit_margin(self):
         ebits = strip(self.income.match_title('Operating Income$'))
         revs = strip(self.income.match_title('Total Revenues$'))
         ebit_margins = list_over_list(ebits, revs, percent=True)
+        avg_ebit_margins = striped_average(ebit_margins)
         print("EBIT margin average {:.2f}% for (numbers in percent) {}".format(
-            average(ebit_margins),
+            avg_ebit_margins,
             list(map(lambda x: round(x, 2), ebit_margins))
         ))
+        self.profiler.collect(avg_ebit_margins, 'ebit_margin', ProfMethod.AveragePerc)
 
     # TODO retined earnings pay in advance for one year?
     def retained_earnings(self):
@@ -202,11 +223,13 @@ class Spread:
         retention_ratio = list_over_list(retained_earnings, net_income)
         # div_paid = strip(self.cashflow.match_title('Common Dividends Paid'))
         # retention_ratio = list_add_list(net_income, div_paid)
+        avg_retention_ratio = striped_average(retention_ratio)
         print("Retention ratio last {:.2f}, average {:.2f} for: {}".format(
             retention_ratio[-1],
-            average(retention_ratio),
+            avg_retention_ratio,
             list(map(lambda x: round(x, 2), retention_ratio))
         ))
+        self.profiler.collect(avg_retention_ratio, 'retention_ratio', ProfMethod.Average)
 
     def dividend_payout_ratio(self):
         div_paid = strip(self.cashflow.match_title('Common Dividends Paid'))
@@ -228,10 +251,12 @@ class Spread:
                 net_income.append(income[i])
 
         div_payout_ratio = list_over_list(div_paid, net_income)
+        avg_div_payout_ratio = striped_average(div_payout_ratio)
         print("Dividend payout ratio at average {:.2f} ratio for: {}".format(
-            average(div_payout_ratio),
+            avg_div_payout_ratio,
             list(map(lambda x: round(x, 2), div_payout_ratio))
         ))
+        self.profiler.collect(avg_div_payout_ratio, 'dividend_payout_ratio', ProfMethod.Average)
 
     def share_out_filing(self) -> float:
         x = self.balance.match_title('Total Shares Out\.')
@@ -239,8 +264,110 @@ class Spread:
         return result
 
 
+class ProfMethod(Enum):
+    CAGR = 1
+    IRR = 2
+    Average = 3
+    AveragePerc = 4
+    AverageYears = 5
+
+
+class Tag(Enum):
+    rev_per_share = 1
+
+
+class Prof:
+    def __init__(self, name):
+        self.name = name
+        self.d = OrderedDict()
+
+        self.sps = None
+        self.prof = {}
+
+    def collect(self, val, tag, method: ProfMethod):
+        # self.d[tag.__name__] = ratio
+        # type: Tuple[float, ProfMethod]
+        _ = (val, method)
+        self.d[tag] = _
+
+    def profile(self):
+        for k, v in self.d.items():
+            if k is not str:
+                self.prof[k] = v
+            if k is Tag.rev_per_share:
+                self.sps = v
+
+
+class ProfManager:
+    Rate = {Tag.rev_per_share: {'high': .08, 'mid': .04}}
+
+    def __init__(self):
+        self.companies = []     # type: List[Prof]
+
+    def create_folder(self, name):
+        prof = Prof(name)
+        self.companies.append(prof)
+        return prof
+
+    def profile(self):
+        for p in self.companies:
+            # print(p.name)
+            p.profile()
+        self.bucketize()
+
+    def bucketize(self):
+        # TODO namedtuple?
+
+        # TODO Need to bucketized multiple companies
+        buck = {'above_avg': [], 'moderate_avg': [], 'below_avg': [], }
+        for c in self.companies:
+            for k, v in c.prof.items():
+                if type(k) is not str:
+                    tup = (c.name, v[0])
+                    if k in ProfManager.Rate:
+                        if v[0] > ProfManager.Rate[k]['high']:
+                            buck['above_avg'].append(tup)
+                        elif v[0] > ProfManager.Rate[k]['mid']:
+                            buck['moderate_avg'].append(tup)
+                        else:
+                            buck['below_avg'].append(tup)
+                        break
+
+        def value(val):
+            # Ignore profile method in v[1][1]
+            return val[1]
+
+        def item(key):
+            return key[0], key[1]
+
+        def at(key):
+            return '{} at {:.2f}%'.format(key[0], key[1] * 100)
+
+        def articulate(bucket, key):
+            values = list(map(value, bucket))
+            items = list(map(item, bucket))
+            comp_at_perc = ', '.join(list(map(at, items)))
+
+            # TODO Can't average of 1 item.
+            if key == 'above_avg':
+                print("SPS {}/{} companies sampled have performed above average rate at CAGR {:.2f}%. "
+                      "These companies are: {}"
+                      .format(len(bucket), len(self.companies), average(values) * 100, comp_at_perc))
+            elif key == 'moderate_avg':
+                print("SPS {}/{} companies sampled performed moderately at average rate of CAGR {:.2f}%. "
+                      "These companies are: {}"
+                      .format(len(bucket), len(self.companies), average(values) * 100, comp_at_perc))
+            else:
+                print("SPS {}/{} companies sampled performed below the average rate of CAGR {:.2f}%. "
+                      .format(len(bucket), len(self.companies), average(values) * 100))
+
+        for _ in 'above_avg', 'moderate_avg', 'below_avg':
+            articulate(buck[_], _)
+
+
 def main():
     path = "C:/Users/benny/iCloudDrive/Documents/malaysia reits"
+    prof = ProfManager()
 
     tickers = ['axreit', 'igbreit', 'sunreit', 'pavreit', 'alaqar',
                'uoareit', 'hektar',
@@ -249,12 +376,12 @@ def main():
 
     # tickers = [ 'atrium']
     # tickers = [ 'clmt']
-    # tickers = [ 'axreit']
     # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ahp']
     for c in tickers:
         print('Ticker {}'.format(c))
         wb = load_workbook(path+'/' + c + '.xlsx')
-        t = Spread(wb, c)
+        pf = prof.create_folder(c)
+        t = Spread(wb, c, pf)
         t.revenue()
         # t.cfo()
         t.affo()
@@ -265,6 +392,8 @@ def main():
         t.ebit_margin()
         t.dividend_payout_ratio()
         print()
+
+    prof.profile()
 
 
 if __name__ == '__main__':
