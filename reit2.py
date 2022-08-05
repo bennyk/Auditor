@@ -177,7 +177,7 @@ class Spread:
             avg_nav_per_share*100,
             list(map(lambda x: round(x, 4), nav_per_share)),
         ))
-        self.profiler.collect(avg_nav_per_share, 'nav_per_share', ProfMethod.CAGR)
+        self.profiler.collect(avg_nav_per_share, Tag.nav_per_share, ProfMethod.CAGR)
 
     def return_equity(self):
         net_income = strip(self.income.match_title('Net Income$'))
@@ -188,7 +188,8 @@ class Spread:
             avg_roce,
             list(map(lambda x: round(x, 2), roce))
         ))
-        self.profiler.collect(avg_roce, 'ROCE', ProfMethod.AveragePerc)
+        # TODO ROCE in percent
+        self.profiler.collect(avg_roce/100, Tag.ROCE, ProfMethod.AveragePerc)
 
     def net_debt_over_ebit(self):
         net_debt = strip(self.balance.match_title('Net Debt'))
@@ -211,7 +212,7 @@ class Spread:
             avg_ebit_margins,
             list(map(lambda x: round(x, 2), ebit_margins))
         ))
-        self.profiler.collect(avg_ebit_margins, 'ebit_margin', ProfMethod.AveragePerc)
+        self.profiler.collect(avg_ebit_margins/100, Tag.ebit_margin, ProfMethod.AveragePerc)
 
     # TODO retined earnings pay in advance for one year?
     def retained_earnings(self):
@@ -274,6 +275,10 @@ class ProfMethod(Enum):
 
 class Tag(Enum):
     rev_per_share = 1
+    nav_per_share = 3
+    ROCE = 4
+    # net_debt_over_ebit = 5
+    ebit_margin = 6
 
 
 class Prof:
@@ -294,13 +299,16 @@ class Prof:
         for k, v in self.d.items():
             if k is not str:
                 self.prof[k] = v
-            if k is Tag.rev_per_share:
-                self.sps = v
 
 
 class ProfManager:
     # TODO report about the underlying rate?
-    Rate = {Tag.rev_per_share: {'high': .08, 'mid': .04}}
+    Rate = {Tag.rev_per_share: {'high': .08, 'mid': .04},
+            Tag.nav_per_share: {'high': .08, 'mid': .05},
+            Tag.ROCE: {'high': .08, 'mid': .065},
+            # Tag.net_debt_over_ebit: {'high': .08, 'mid': .065},
+            Tag.ebit_margin: {'high': .7, 'mid': .6},
+            }
 
     def __init__(self):
         self.companies = []     # type: List[Prof]
@@ -330,13 +338,13 @@ class ProfManager:
                         assert k in metric
                         buck = metric[k]
                         tup = (c.name, v[0])
+                        # TODO net_debt_over_ebit need bucketize debt
                         if v[0] > ProfManager.Rate[k]['high']:
                             buck['above_avg'].append(tup)
                         elif v[0] > ProfManager.Rate[k]['mid']:
                             buck['moderate_avg'].append(tup)
                         else:
                             buck['below_avg'].append(tup)
-                        break
 
         def value(val):
             # Ignore profile method in v[1][1]
@@ -365,6 +373,8 @@ class ProfManager:
                 print("{}/{} companies sampled performed below the average rate of CAGR {:.2f}%. "
                       .format(len(bucket), len(self.companies), average(values) * 100))
 
+        # TODO need to solve for AFFO, net debt over ebit, retention ratio, div payout ratio
+
         for k, v in metric.items():
             print("Based on {}:".format(k))
             for avg_rate in 'above_avg', 'moderate_avg', 'below_avg':
@@ -382,7 +392,7 @@ def main():
 
     # tickers = [ 'atrium']
     # tickers = [ 'clmt']
-    # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ahp']
+    # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ytlreit', 'ahp']
     for c in tickers:
         print('Ticker {}'.format(c))
         wb = load_workbook(path+'/' + c + '.xlsx')
