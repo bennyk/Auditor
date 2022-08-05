@@ -299,6 +299,7 @@ class Prof:
 
 
 class ProfManager:
+    # TODO report about the underlying rate?
     Rate = {Tag.rev_per_share: {'high': .08, 'mid': .04}}
 
     def __init__(self):
@@ -318,13 +319,17 @@ class ProfManager:
     def bucketize(self):
         # TODO namedtuple?
 
-        # TODO Need to bucketized multiple companies
-        buck = {'above_avg': [], 'moderate_avg': [], 'below_avg': [], }
+        metric = {}
+        for x in Tag:
+            metric[x] = {'above_avg': [], 'moderate_avg': [], 'below_avg': [], }
+
         for c in self.companies:
             for k, v in c.prof.items():
                 if type(k) is not str:
-                    tup = (c.name, v[0])
                     if k in ProfManager.Rate:
+                        assert k in metric
+                        buck = metric[k]
+                        tup = (c.name, v[0])
                         if v[0] > ProfManager.Rate[k]['high']:
                             buck['above_avg'].append(tup)
                         elif v[0] > ProfManager.Rate[k]['mid']:
@@ -348,21 +353,22 @@ class ProfManager:
             items = list(map(item, bucket))
             comp_at_perc = ', '.join(list(map(at, items)))
 
-            # TODO Can't average of 1 item.
             if key == 'above_avg':
-                print("SPS {}/{} companies sampled have performed above average rate at CAGR {:.2f}%. "
+                print("{}/{} companies sampled have performed above average rate at CAGR {:.2f}%. "
                       "These companies are: {}"
                       .format(len(bucket), len(self.companies), average(values) * 100, comp_at_perc))
             elif key == 'moderate_avg':
-                print("SPS {}/{} companies sampled performed moderately at average rate of CAGR {:.2f}%. "
+                print("{}/{} companies sampled performed moderately at average rate of CAGR {:.2f}%. "
                       "These companies are: {}"
                       .format(len(bucket), len(self.companies), average(values) * 100, comp_at_perc))
             else:
-                print("SPS {}/{} companies sampled performed below the average rate of CAGR {:.2f}%. "
+                print("{}/{} companies sampled performed below the average rate of CAGR {:.2f}%. "
                       .format(len(bucket), len(self.companies), average(values) * 100))
 
-        for _ in 'above_avg', 'moderate_avg', 'below_avg':
-            articulate(buck[_], _)
+        for k, v in metric.items():
+            print("Based on {}:".format(k))
+            for avg_rate in 'above_avg', 'moderate_avg', 'below_avg':
+                articulate(v[avg_rate], avg_rate)
 
 
 def main():
