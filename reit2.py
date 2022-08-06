@@ -6,6 +6,8 @@ import re
 
 max_row = max_col = 99
 
+Unit = namedtuple('Unit', ['value', 'symbol'])
+
 
 def colnum_string(n):
     string = ""
@@ -201,7 +203,7 @@ class Spread:
             avg_net_debt_over_ebit,
             list(map(lambda x: round(x, 2), net_debt_over_ebit))
         ))
-        self.profiler.collect(avg_net_debt_over_ebit, 'net_debt_over_ebit', ProfMethod.AverageYears)
+        self.profiler.collect(avg_net_debt_over_ebit, Tag.net_debt_over_ebit, ProfMethod.AverageYears)
 
     def ebit_margin(self):
         ebits = strip(self.income.match_title('Operating Income$'))
@@ -278,7 +280,7 @@ class Tag(Enum):
     affo_per_share = 2
     nav_per_share = 3
     ROCE = 4
-    # net_debt_over_ebit = 5
+    net_debt_over_ebit = 5
     ebit_margin = 6
 
 
@@ -308,7 +310,7 @@ class ProfManager:
             Tag.affo_per_share: {'high': .3, 'mid': .05},
             Tag.nav_per_share: {'high': .08, 'mid': .05},
             Tag.ROCE: {'high': .08, 'mid': .065},
-            # Tag.net_debt_over_ebit: {'high': .08, 'mid': .065},
+            Tag.net_debt_over_ebit: {'high': 5., 'mid': 8.},
             Tag.ebit_margin: {'high': .7, 'mid': .6},
             }
 
@@ -341,28 +343,29 @@ class ProfManager:
                         buck = metric[k]
                         tup = (c.name, v[0], v[1])
                         # TODO net_debt_over_ebit need bucketize debt
-                        if v[0] > ProfManager.Rate[k]['high']:
-                            buck['above_avg'].append(tup)
-                        elif v[0] > ProfManager.Rate[k]['mid']:
-                            buck['moderate_avg'].append(tup)
+                        if v[1] is ProfMethod.AverageYears:
+                            if v[0] < ProfManager.Rate[k]['high']:
+                                buck['above_avg'].append(tup)
+                            elif v[0] < ProfManager.Rate[k]['mid']:
+                                buck['moderate_avg'].append(tup)
+                            else:
+                                buck['below_avg'].append(tup)
                         else:
-                            buck['below_avg'].append(tup)
+                            if v[0] > ProfManager.Rate[k]['high']:
+                                buck['above_avg'].append(tup)
+                            elif v[0] > ProfManager.Rate[k]['mid']:
+                                buck['moderate_avg'].append(tup)
+                            else:
+                                buck['below_avg'].append(tup)
 
         def value(val):
-            # Ignore profile method in v[1][1]
             return val[1]
 
         def item(key):
             return key[0], key[1]
 
-        def at(key):
-            return '{} at {:.2f}%'.format(key[0], key[1] * 100)
-
         def articulate(bucket, key):
             values = list(map(value, bucket))
-            items = list(map(item, bucket))
-            comp_at_perc = ', '.join(list(map(at, items)))
-
             if len(values) > 0:
 
                 # TODO 0 == ticker, 1 == ratio, 2 == CAGR/IRR/years method
@@ -370,12 +373,25 @@ class ProfManager:
                 if method is ProfMethod.CAGR:
                     method = 'CAGR'
                 elif method is ProfMethod.AveragePerc:
-                    method = 'average percent'
+                    method = 'percent'
+                elif method is ProfMethod.AverageYears:
+                    method = 'years'
                 elif method is ProfMethod.IRR:
                     method = 'IRR'
 
-                print("{}/{} companies sampled have performed above average rate at {} {:.2f}%. ".format(
-                    len(bucket), len(self.companies), method, average(values)*100), end='')
+                def at(k):
+                    if method == 'years':
+                        return '{} at {:.2f} yrs'.format(k[0], k[1])
+                    return '{} at {:.2f}%'.format(k[0], k[1] * 100)
+
+                items = list(map(item, bucket))
+                comp_at_perc = ', '.join(list(map(at, items)))
+
+                unit = Unit(value=100, symbol='%')
+                if method == 'years':
+                    unit = Unit(value=1, symbol='')
+                print("{}/{} companies sampled have performed above average rate at {} {:.2f}{}. ".format(
+                    len(bucket), len(self.companies), method, average(values)*unit.value, unit.symbol), end='')
                 if key == 'above_avg':
                     print("These companies are: {}".format(comp_at_perc))
                 elif key == 'moderate_avg':
