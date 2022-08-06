@@ -7,6 +7,13 @@ import re
 max_row = max_col = 99
 
 Unit = namedtuple('Unit', ['value', 'symbol'])
+RateType = namedtuple('Rate', ['above_avg', 'moderate_avg', 'below_avg'])
+
+RateVerbose = {RateType.above_avg: 'above',
+               RateType.moderate_avg: 'moderately at',
+
+               # TODO "do not perform" below level
+               RateType.below_avg: 'below'}
 
 
 def colnum_string(n):
@@ -275,6 +282,13 @@ class ProfMethod(Enum):
     AverageYears = 5
 
 
+ProfVerbose = {ProfMethod.CAGR: 'CAGR',
+               ProfMethod.IRR: 'IRR',
+               ProfMethod.Average: 'average',
+               ProfMethod.AveragePerc: 'percent',
+               ProfMethod.AverageYears: 'year'}
+
+
 class Tag(Enum):
     rev_per_share = 1
     affo_per_share = 2
@@ -333,7 +347,7 @@ class ProfManager:
 
         metric = {}
         for x in Tag:
-            metric[x] = {'above_avg': [], 'moderate_avg': [], 'below_avg': [], }
+            metric[x] = {RateType.above_avg: [], RateType.moderate_avg: [], RateType.below_avg: [], }
 
         for c in self.companies:
             for k, v in c.prof.items():
@@ -342,21 +356,20 @@ class ProfManager:
                         assert k in metric
                         buck = metric[k]
                         tup = (c.name, v[0], v[1])
-                        # TODO net_debt_over_ebit need bucketize debt
                         if v[1] is ProfMethod.AverageYears:
                             if v[0] < ProfManager.Rate[k]['high']:
-                                buck['above_avg'].append(tup)
+                                buck[RateType.above_avg].append(tup)
                             elif v[0] < ProfManager.Rate[k]['mid']:
-                                buck['moderate_avg'].append(tup)
+                                buck[RateType.moderate_avg].append(tup)
                             else:
-                                buck['below_avg'].append(tup)
+                                buck[RateType.below_avg].append(tup)
                         else:
                             if v[0] > ProfManager.Rate[k]['high']:
-                                buck['above_avg'].append(tup)
+                                buck[RateType.above_avg].append(tup)
                             elif v[0] > ProfManager.Rate[k]['mid']:
-                                buck['moderate_avg'].append(tup)
+                                buck[RateType.moderate_avg].append(tup)
                             else:
-                                buck['below_avg'].append(tup)
+                                buck[RateType.below_avg].append(tup)
 
         def value(val):
             return val[1]
@@ -367,20 +380,14 @@ class ProfManager:
         def articulate(bucket, key):
             values = list(map(value, bucket))
             if len(values) > 0:
-
-                # TODO 0 == ticker, 1 == ratio, 2 == CAGR/IRR/years method
+                # TODO need to enumerate the index: -
+                #  0 == company,
+                #  1 == value of percent, years, etc.,
+                #  2 == name of method see ProfMethod class
                 method = bucket[0][2]
-                if method is ProfMethod.CAGR:
-                    method = 'CAGR'
-                elif method is ProfMethod.AveragePerc:
-                    method = 'percent'
-                elif method is ProfMethod.AverageYears:
-                    method = 'years'
-                elif method is ProfMethod.IRR:
-                    method = 'IRR'
 
                 def at(k):
-                    if method == 'years':
+                    if method is ProfMethod.AverageYears:
                         return '{} at {:.2f} yrs'.format(k[0], k[1])
                     return '{} at {:.2f}%'.format(k[0], k[1] * 100)
 
@@ -388,13 +395,14 @@ class ProfManager:
                 comp_at_perc = ', '.join(list(map(at, items)))
 
                 unit = Unit(value=100, symbol='%')
-                if method == 'years':
+                if method is ProfMethod.AverageYears:
                     unit = Unit(value=1, symbol='')
-                print("{}/{} companies sampled have performed above average rate at {} {:.2f}{}. ".format(
-                    len(bucket), len(self.companies), method, average(values)*unit.value, unit.symbol), end='')
-                if key == 'above_avg':
+
+                print("{}/{} companies sampled have performed {} average rate of {} {:.2f}{}. ".format(
+                    len(bucket), len(self.companies), RateVerbose[key], ProfVerbose[method], average(values)*unit.value, unit.symbol), end='')
+                if key is RateType.above_avg:
                     print("These companies are: {}".format(comp_at_perc))
-                elif key == 'moderate_avg':
+                elif key is RateType.moderate_avg:
                     print("These companies are: {}".format(comp_at_perc))
                 else:
                     print()
@@ -403,7 +411,8 @@ class ProfManager:
 
         for k, v in metric.items():
             print("Based on {}:".format(k))
-            for avg_rate in 'above_avg', 'moderate_avg', 'below_avg':
+            # TODO Near right but not enum hmmm RateType._fields:
+            for avg_rate in RateType.above_avg, RateType.moderate_avg, RateType.below_avg:
                 articulate(v[avg_rate], avg_rate)
 
 
