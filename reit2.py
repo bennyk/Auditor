@@ -270,12 +270,13 @@ class Spread:
                 net_income.append(income[i])
 
         div_payout_ratio = list_over_list(div_paid, net_income)
-        avg_div_payout_ratio = striped_average(div_payout_ratio)
+        # Negating div payout to positive for the math to work easier
+        avg_div_payout_ratio = - striped_average(div_payout_ratio)
         print("Dividend payout ratio at average {:.2f} ratio for: {}".format(
             avg_div_payout_ratio,
             list(map(lambda x: round(x, 2), div_payout_ratio))
         ))
-        self.profiler.collect(avg_div_payout_ratio, 'dividend_payout_ratio', ProfMethod.Average)
+        self.profiler.collect(avg_div_payout_ratio, Tag.dividend_payout_ratio, ProfMethod.Average)
 
     def share_out_filing(self) -> float:
         x = self.balance.match_title('Total Shares Out\.')
@@ -309,6 +310,7 @@ class Tag(Enum):
     net_debt_over_ebit = 5
     ebit_margin = 6
     retained_earnings_ratio = 7
+    dividend_payout_ratio = 8
 
 
 class Prof:
@@ -340,6 +342,7 @@ class ProfManager:
             Tag.net_debt_over_ebit: {'high': 5., 'mid': 8.},
             Tag.ebit_margin: {'high': .7, 'mid': .6},
             Tag.retained_earnings_ratio: {'high': 5., 'mid': .0},
+            Tag.dividend_payout_ratio: {'high': 1.5, 'mid': 1.},
             }
 
     def __init__(self):
