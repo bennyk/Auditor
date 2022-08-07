@@ -224,22 +224,31 @@ class Spread:
         self.profiler.collect(avg_ebit_margins/100, Tag.ebit_margin, ProfMethod.AveragePerc)
 
     # TODO retined earnings pay in advance for one year?
-    def retained_earnings(self):
-        retained_earnings = strip(self.balance.match_title('Retained Earnings$'), trim_last=True)
+    def retained_earnings_ratio(self):
+        _ = strip(self.balance.match_title('Retained Earnings$'), trim_last=True)
+        # skip the latest annual for retained earnings only
+        retained_earnings = _[:-1]
         # TODO some Company such as IGBREIT does not provide Retained Earnings forecast
         # print("XXX retained earnings", len(retained_earnings), retained_earnings)
-        net_income = strip(self.income.match_title('Net Income$'), trim_last=True)
+        _ = strip(self.income.match_title('Net Income$'), trim_last=True)
+        # skip the first year annual for net income only
+        net_income = _[1:]
         # print("XXX net income", len(net_income), net_income)
         retention_ratio = list_over_list(retained_earnings, net_income)
         # div_paid = strip(self.cashflow.match_title('Common Dividends Paid'))
         # retention_ratio = list_add_list(net_income, div_paid)
+
+        last_retention_ratio = retention_ratio[-1]
+        # retention ratio is measured by carry out from the previous annual report,
+        # while adding net income to the current annual report
+
         avg_retention_ratio = striped_average(retention_ratio)
         print("Retention ratio last {:.2f}, average {:.2f} for: {}".format(
-            retention_ratio[-1],
+            last_retention_ratio,
             avg_retention_ratio,
             list(map(lambda x: round(x, 2), retention_ratio))
         ))
-        self.profiler.collect(avg_retention_ratio, 'retention_ratio', ProfMethod.Average)
+        self.profiler.collect(last_retention_ratio, Tag.retained_earnings_ratio, ProfMethod.Ratio)
 
     def dividend_payout_ratio(self):
         div_paid = strip(self.cashflow.match_title('Common Dividends Paid'))
@@ -280,13 +289,16 @@ class ProfMethod(Enum):
     Average = 3
     AveragePerc = 4
     AverageYears = 5
+    Ratio = 6
 
 
 ProfVerbose = {ProfMethod.CAGR: 'CAGR',
                ProfMethod.IRR: 'IRR',
                ProfMethod.Average: 'average',
                ProfMethod.AveragePerc: 'percent',
-               ProfMethod.AverageYears: 'year'}
+               ProfMethod.AverageYears: 'year',
+               ProfMethod.Ratio: 'ratio',
+               }
 
 
 class Tag(Enum):
@@ -296,6 +308,7 @@ class Tag(Enum):
     ROCE = 4
     net_debt_over_ebit = 5
     ebit_margin = 6
+    retained_earnings_ratio = 7
 
 
 class Prof:
@@ -326,6 +339,7 @@ class ProfManager:
             Tag.ROCE: {'high': .08, 'mid': .065},
             Tag.net_debt_over_ebit: {'high': 5., 'mid': 8.},
             Tag.ebit_margin: {'high': .7, 'mid': .6},
+            Tag.retained_earnings_ratio: {'high': 5., 'mid': .0},
             }
 
     def __init__(self):
@@ -385,9 +399,10 @@ class ProfManager:
                 #  1 == value of percent, years, etc.,
                 #  2 == name of method see ProfMethod class
                 method = bucket[0][2]
+                unit_ratio = (ProfMethod.AverageYears, ProfMethod.Ratio)
 
                 def at(k):
-                    if method is ProfMethod.AverageYears:
+                    if method in unit_ratio:
                         return '{} at {:.2f} yrs'.format(k[0], k[1])
                     return '{} at {:.2f}%'.format(k[0], k[1] * 100)
 
@@ -395,7 +410,7 @@ class ProfManager:
                 comp_at_perc = ', '.join(list(map(at, items)))
 
                 unit = Unit(value=100, symbol='%')
-                if method is ProfMethod.AverageYears:
+                if method in unit_ratio:
                     unit = Unit(value=1, symbol='')
 
                 print("{}/{} companies sampled have performed {} average rate of {} {:.2f}{}. ".format(
@@ -439,7 +454,7 @@ def main():
         t.nav()
         t.return_equity()
         t.net_debt_over_ebit()
-        t.retained_earnings()
+        t.retained_earnings_ratio()
         t.ebit_margin()
         t.dividend_payout_ratio()
         print()
