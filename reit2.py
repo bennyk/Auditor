@@ -333,6 +333,14 @@ class Prof:
                 self.prof[k] = v
 
 
+class Bucket:
+    def __init__(self, name, value, method):
+        self.name = name
+        self.value = value
+        self.method = method
+        self.score = None
+
+
 class ProfManager:
     # TODO report about the underlying rate?
     Rate = {Tag.rev_per_share: {'high': .08, 'mid': .04},
@@ -347,6 +355,7 @@ class ProfManager:
 
     def __init__(self):
         self.companies = []     # type: List[Prof]
+        self.metric = {}
 
     def create_folder(self, name):
         prof = Prof(name)
@@ -358,21 +367,58 @@ class ProfManager:
             # print(p.name)
             p.profile()
         self.bucketize()
+        self.benchmark()
+
+    def benchmark(self):
+        # Grading process
+        # For each metric based on rev_per_share, affo_per_share, nav_per_share, ...
+        #   Rank based on above, moderate and below average.
+        #       Collect the company for metric and rank level.
+        # Accessible via the hash metric: metric[Tag.rev_per_share][RateType.above_avg]
+
+        met = {}
+        for k, v in self.metric.items():
+            for v1 in v.values():
+                if len(v1) > 0:
+                    for x in v1:
+                        if x.name not in met:
+                            met[x.name] = 0
+                        met[x.name] += x.score
+
+        final = {RateType.above_avg: [], RateType.moderate_avg: [], RateType.below_avg: []}
+        for k, v in met.items():
+            if v >= 4.:
+                x = final[RateType.above_avg]
+            elif v >= 3.:
+                x = final[RateType.moderate_avg]
+            else:
+                x = final[RateType.below_avg]
+            x.append(k)
+
+        print()
+        for k, v in final.items():
+            if k is RateType.above_avg:
+                print("Companies that performed above average are: ", end='')
+            elif k is RateType.moderate_avg:
+                print("Companies that performed moderate average are: ", end='')
+            else:
+                print("Companies which are below average are: ", end='')
+            print("{} out of {} sample".format(v, len(v)))
+        print("Total companies sampled thus far is {}".format(len(self.companies)))
 
     def bucketize(self):
         # TODO namedtuple?
 
-        metric = {}
         for x in Tag:
-            metric[x] = {RateType.above_avg: [], RateType.moderate_avg: [], RateType.below_avg: [], }
+            self.metric[x] = {RateType.above_avg: [], RateType.moderate_avg: [], RateType.below_avg: [], }
 
         for c in self.companies:
             for k, v in c.prof.items():
                 if type(k) is not str:
                     if k in ProfManager.Rate:
-                        assert k in metric
-                        buck = metric[k]
-                        tup = (c.name, v[0], v[1])
+                        assert k in self.metric
+                        buck = self.metric[k]
+                        tup = Bucket(c.name, v[0], v[1])
                         if v[1] is ProfMethod.AverageYears:
                             if v[0] < ProfManager.Rate[k]['high']:
                                 buck[RateType.above_avg].append(tup)
@@ -389,19 +435,19 @@ class ProfManager:
                                 buck[RateType.below_avg].append(tup)
 
         def value(val):
-            return val[1]
+            return val.value
 
-        def item(key):
-            return key[0], key[1]
+        def item(key: Bucket):
+            return key.name, key.value
 
-        def articulate(bucket, key):
-            values = list(map(value, bucket))
+        def articulate(buckets: List[Bucket], key):
+            values = list(map(value, buckets))
             if len(values) > 0:
                 # TODO need to enumerate the index: -
                 #  0 == company,
                 #  1 == value of percent, years, etc.,
                 #  2 == name of method see ProfMethod class
-                method = bucket[0][2]
+                method = buckets[0].method
                 unit_ratio = (ProfMethod.AverageYears, ProfMethod.Ratio)
 
                 def at(k):
@@ -409,7 +455,7 @@ class ProfManager:
                         return '{} at {:.2f} yrs'.format(k[0], k[1])
                     return '{} at {:.2f}%'.format(k[0], k[1] * 100)
 
-                items = list(map(item, bucket))
+                items = list(map(item, buckets))
                 comp_at_perc = ', '.join(list(map(at, items)))
 
                 unit = Unit(value=100, symbol='%')
@@ -417,17 +463,24 @@ class ProfManager:
                     unit = Unit(value=1, symbol='')
 
                 print("{}/{} companies sampled have performed {} average rate of {} {:.2f}{}. ".format(
-                    len(bucket), len(self.companies), RateVerbose[key], ProfVerbose[method], average(values)*unit.value, unit.symbol), end='')
+                    len(buckets), len(self.companies), RateVerbose[key], ProfVerbose[method], average(values) * unit.value, unit.symbol), end='')
                 if key is RateType.above_avg:
                     print("These companies are: {}".format(comp_at_perc))
+                    # TODO apply() function?
+                    for a in buckets:
+                        a.score = 1.
                 elif key is RateType.moderate_avg:
                     print("These companies are: {}".format(comp_at_perc))
+                    for a in buckets:
+                        a.score = .5
                 else:
+                    for a in buckets:
+                        a.score = 0
                     print()
 
         # TODO need to solve for AFFO, net debt over ebit, retention ratio, div payout ratio
 
-        for k, v in metric.items():
+        for k, v in self.metric.items():
             print("Based on {}:".format(k))
             # TODO Near right but not enum hmmm RateType._fields:
             for avg_rate in RateType.above_avg, RateType.moderate_avg, RateType.below_avg:
