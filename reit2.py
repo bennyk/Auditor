@@ -494,11 +494,11 @@ def main():
     tickers = ['axreit', 'igbreit', 'sunreit', 'pavreit', 'alaqar',
                'uoareit', 'hektar',
                'klcc', 'amfirst', 'ytlreit', 'arreit', 'clmt',
-               'twrreit', 'ahp', 'kipreit']
+               'twrreit', 'ahp', 'kipreit',
+               'sentral', 'atrium', 'alsreit']
 
-    # tickers = [ 'atrium']
     # tickers = [ 'clmt']
-    # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ytlreit', 'ahp']
+    # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ytlreit', 'ahp', 'atrium']
     for c in tickers:
         print('Ticker {}'.format(c))
         wb = load_workbook(path+'/' + c + '.xlsx')
