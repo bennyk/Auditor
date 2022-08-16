@@ -39,6 +39,17 @@ def strip(l, trim_last=False):
     return l[1:]
 
 
+def strip2(l, trim_last=False):
+    # TODO need to check against original strip implementation.
+    if trim_last:
+        return l[1:][:-1]
+
+    _ = l[1:]
+    if type(_[0]) is str:
+        return list(map(lambda x: float(re.sub(r'(\d+)x', r'\1', x)), _))
+    return _
+
+
 def list_over_list(x, y, percent=False):
     if percent:
         # return list(map(lambda n1, n2: (n1 / n2), x, y))
@@ -67,13 +78,18 @@ class Table:
 
     def __init__(self, sheet_ranges):
         self.date_range = []
-        # configure spreadsheet based on number of cols.
-        for j in range(2, max_col):
-            c0 = "{}{}".format(colnum_string(j), 1)
-            self.date_range.append(sheet_ranges[c0].value)
-            if re.match(r'LTM$', sheet_ranges[c0].value):
-                Table.col_limit = j + 1
-                break
+        last_limit = 0
+        try:
+            # configure spreadsheet based on number of cols.
+            for j in range(2, max_col):
+                c0 = "{}{}".format(colnum_string(j), 1)
+                self.date_range.append(sheet_ranges[c0].value)
+                if re.match(r'LTM$', sheet_ranges[c0].value):
+                    Table.col_limit = j + 1
+                    break
+                last_limit = j+1
+        except TypeError:
+            Table.col_limit = last_limit
 
         self.tab = []
         for i in range(1, max_row):
@@ -89,7 +105,7 @@ class Table:
     def match_title(self, reg):
         result = None
         for _ in self.tab:
-            if re.match(reg, _[0]):
+            if re.match(reg, _[0].strip()):
                 result = _
                 break
         assert result is not None
@@ -104,6 +120,7 @@ class Spread:
         self.income = None
         self.balance = None
         self.cashflow = None
+        self.values = None
         for index, name in enumerate(wb.sheetnames):
             tab = Table(wb[name])
             self.tabs.append(tab)
@@ -116,6 +133,8 @@ class Spread:
                 self.balance = tab
             elif re.match(r'Cash', name):
                 self.cashflow = tab
+            elif re.match(r'Values', name):
+                self.values = tab
             else:
                 # passing Ratios
                 pass
@@ -223,6 +242,19 @@ class Spread:
         ))
         self.profiler.collect(avg_ebit_margins/100, Tag.ebit_margin, ProfMethod.AveragePerc)
 
+    def ev_over_ebit(self):
+        if self.values is None:
+            # TODO exception to EV over EBIT
+            print("Warning: ev_over_ebit: Missing values tab.")
+            return
+        ev_over_ebit = strip2(self.values.match_title('LTM Total Enterprise Value / EBIT$'))
+        avg_ev_over_ebit = striped_average(ev_over_ebit)
+        print("EV over EBIT average {:.2f} ratio for: {}".format(
+            avg_ev_over_ebit,
+            list(map(lambda x: round(x, 2), ev_over_ebit))
+        ))
+        self.profiler.collect(avg_ev_over_ebit, Tag.ev_over_ebit, ProfMethod.ReverseRatio)
+
     # TODO retined earnings pay in advance for one year?
     def retained_earnings_ratio(self):
         _ = strip(self.balance.match_title('Retained Earnings$'), trim_last=True)
@@ -291,6 +323,7 @@ class ProfMethod(Enum):
     AveragePerc = 4
     AverageYears = 5
     Ratio = 6
+    ReverseRatio = 7
 
 
 ProfVerbose = {ProfMethod.CAGR: 'CAGR',
@@ -299,6 +332,7 @@ ProfVerbose = {ProfMethod.CAGR: 'CAGR',
                ProfMethod.AveragePerc: 'percent',
                ProfMethod.AverageYears: 'year',
                ProfMethod.Ratio: 'ratio',
+               ProfMethod.ReverseRatio: 'ratio',
                }
 
 
@@ -311,6 +345,7 @@ class Tag(Enum):
     ebit_margin = 6
     retained_earnings_ratio = 7
     dividend_payout_ratio = 8
+    ev_over_ebit = 9
 
 
 class Prof:
@@ -351,6 +386,7 @@ class ProfManager:
             Tag.ebit_margin: {'high': .7, 'mid': .6},
             Tag.retained_earnings_ratio: {'high': 5., 'mid': .0},
             Tag.dividend_payout_ratio: {'high': 1.5, 'mid': 1.},
+            Tag.ev_over_ebit: {'high': 16., 'mid': 18.},
             }
 
     def __init__(self):
@@ -419,7 +455,7 @@ class ProfManager:
                         assert k in self.metric
                         buck = self.metric[k]
                         tup = Bucket(c.name, v[0], v[1])
-                        if v[1] is ProfMethod.AverageYears:
+                        if v[1] in (ProfMethod.AverageYears, ProfMethod.ReverseRatio):
                             if v[0] < ProfManager.Rate[k]['high']:
                                 buck[RateType.above_avg].append(tup)
                             elif v[0] < ProfManager.Rate[k]['mid']:
@@ -448,7 +484,7 @@ class ProfManager:
                 #  1 == value of percent, years, etc.,
                 #  2 == name of method see ProfMethod class
                 method = buckets[0].method
-                unit_ratio = (ProfMethod.AverageYears, ProfMethod.Ratio)
+                unit_ratio = (ProfMethod.AverageYears, ProfMethod.Ratio, ProfMethod.ReverseRatio)
 
                 def at(k):
                     if method in unit_ratio:
@@ -462,6 +498,8 @@ class ProfManager:
                 if method in unit_ratio:
                     unit = Unit(value=1, symbol='')
 
+                # TODO modify current "performed above average rate"
+                #  to "below the average over the last 10 years sampled, at undemanding rate"
                 print("{}/{} companies sampled have performed {} average rate of {} {:.2f}{}. ".format(
                     len(buckets), len(self.companies), RateVerbose[key], ProfVerbose[method], average(values) * unit.value, unit.symbol), end='')
                 if key is RateType.above_avg:
@@ -512,6 +550,7 @@ def main():
         t.net_debt_over_ebit()
         t.retained_earnings_ratio()
         t.ebit_margin()
+        t.ev_over_ebit()
         t.dividend_payout_ratio()
         print()
 
