@@ -423,9 +423,9 @@ class ProfManager:
 
         final = {RateType.above_avg: [], RateType.moderate_avg: [], RateType.below_avg: []}
         for k, v in met.items():
-            if v >= 4.:
+            if v >= 5.:
                 x = final[RateType.above_avg]
-            elif v >= 3.:
+            elif v >= 4.:
                 x = final[RateType.moderate_avg]
             else:
                 x = final[RateType.below_avg]
