@@ -562,8 +562,11 @@ class ProfManager:
                             diff = (current - record) / record
                             ev_over_ebit_incr = 'undemanding price'\
                                 if current < record else 'premium valuation/overpriced'
-                            print("- Based on EV over EBIT, it is available at {} at {:.2f}".format(
-                                ev_over_ebit_incr, diff*100))
+                            trend = '+' if diff > 0 else ''
+                            print("- Last EV over EBIT was {current:.2f} %,"
+                                  " average was {record:.2f} %, valued at {ev_over_ebit_incr} after {diff:.2f} pts"
+                                  .format(ev_over_ebit_incr=ev_over_ebit_incr, trend=trend,
+                                          diff=diff*100, record=record, current=current))
 
                             div_yields = list(map(lambda z: 0 if z is None else z, company.last_price['div_yields']))
                             avg_div_yield = average(div_yields)
@@ -576,6 +579,7 @@ class ProfManager:
         _([RateType.above_avg, RateType.moderate_avg])
         print("\nThe following quotes were rated at below average rating though")
         _([RateType.below_avg])
+
 
 def main():
     path = "C:/Users/benny/iCloudDrive/Documents/malaysia reits"
