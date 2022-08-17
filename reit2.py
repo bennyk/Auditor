@@ -317,9 +317,12 @@ class Spread:
 
         price = self.values.match_title('Price$')
         ev_over_ebit = strip2(self.values.match_title('LTM Total Enterprise Value / EBIT$'))
+        div_yield = strip2(self.values.match_title('LTM Dividend Yield$'))
 
         self.profiler.collect_last_price({'last_price': price[-1],
-                                          'ev_over_ebit': ev_over_ebit[-1], })
+                                          'ev_over_ebit': ev_over_ebit[-1],
+                                          'last_div_yield': div_yield[-1],
+                                          'div_yields': div_yield, })
 
     def share_out_filing(self) -> float:
         x = self.balance.match_title('Total Shares Out\.')
@@ -544,22 +547,35 @@ class ProfManager:
 
     def simulate_price(self, benched):
         print()
-        for k, v in benched.items():
-            if k in [RateType.above_avg, RateType.moderate_avg]:
-                for x in v:
-                    assert x in self.company
-                    if self.company[x].last_price is not None:
-                        print("{}'s last quote was {}. ".format(
-                            x, self.company[x].last_price['last_price']), end='')
 
-                        current = self.company[x].last_price['ev_over_ebit']
-                        record = self.company[x].prof[Tag.ev_over_ebit][0]
-                        diff = (current - record) / record
-                        if current < record:
-                            print("It is available at undemanding price at {:.2f} % based on EV / EBIT".format(diff*100))
-                        else:
-                            print("It is at premium valuation/overpriced at {:.2f} % based on EV / EBIT".format(diff*100))
+        def _(cat):
+            for k, v in benched.items():
+                if k in cat:
+                    for x in v:
+                        assert x in self.company
+                        company = self.company[x]
+                        if company.last_price is not None:
+                            print("{}'s last quote was {}: -".format(x, company.last_price['last_price']))
 
+                            current = company.last_price['ev_over_ebit']
+                            record = company.prof[Tag.ev_over_ebit][0]
+                            diff = (current - record) / record
+                            ev_over_ebit_incr = 'undemanding price'\
+                                if current < record else 'premium valuation/overpriced'
+                            print("- Based on EV over EBIT, it is available at {} at {:.2f}".format(
+                                ev_over_ebit_incr, diff*100))
+
+                            div_yields = list(map(lambda z: 0 if z is None else z, company.last_price['div_yields']))
+                            avg_div_yield = average(div_yields)
+                            dy_incr = 100 * (company.last_price['last_div_yield'] - avg_div_yield) / avg_div_yield
+                            trend = 'upside +' if dy_incr > 0 else 'downside '
+                            print("- Last div yield was {:.2f} %, we see last {}{:.2f} pts"
+                                  " based on average div yield of {:.2f} % ".format(
+                                    company.last_price['last_div_yield']*100, trend, dy_incr, avg_div_yield*100, ))
+
+        _([RateType.above_avg, RateType.moderate_avg])
+        print("\nThe following quotes were rated at below average rating though")
+        _([RateType.below_avg])
 
 def main():
     path = "C:/Users/benny/iCloudDrive/Documents/malaysia reits"
