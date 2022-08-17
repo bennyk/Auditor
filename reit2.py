@@ -89,7 +89,7 @@ class Table:
                     break
                 last_limit = j+1
         except TypeError:
-            Table.col_limit = last_limit
+            Table.col_limit = last_limit+1
 
         self.tab = []
         for i in range(1, max_row):
@@ -310,6 +310,17 @@ class Spread:
         ))
         self.profiler.collect(avg_div_payout_ratio, Tag.dividend_payout_ratio, ProfMethod.Average)
 
+    def last_price(self):
+        if self.values is None:
+            print("Warning: last_price: Missing values tab.")
+            return
+
+        price = self.values.match_title('Price$')
+        ev_over_ebit = strip2(self.values.match_title('LTM Total Enterprise Value / EBIT$'))
+
+        self.profiler.collect_last_price({'last_price': price[-1],
+                                          'ev_over_ebit': ev_over_ebit[-1], })
+
     def share_out_filing(self) -> float:
         x = self.balance.match_title('Total Shares Out\.')
         result = list(filter(None, reversed(x[1:])))[0]
@@ -352,8 +363,8 @@ class Prof:
     def __init__(self, name):
         self.name = name
         self.d = OrderedDict()
+        self.last_price = None
 
-        self.sps = None
         self.prof = {}
 
     def collect(self, val, tag, method: ProfMethod):
@@ -361,6 +372,9 @@ class Prof:
         # type: Tuple[float, ProfMethod]
         _ = (val, method)
         self.d[tag] = _
+
+    def collect_last_price(self, last_price):
+        self.last_price = last_price
 
     def profile(self):
         for k, v in self.d.items():
@@ -391,11 +405,13 @@ class ProfManager:
 
     def __init__(self):
         self.companies = []     # type: List[Prof]
+        self.company = {}
         self.metric = {}
 
     def create_folder(self, name):
         prof = Prof(name)
         self.companies.append(prof)
+        self.company[name] = prof
         return prof
 
     def profile(self):
@@ -403,7 +419,8 @@ class ProfManager:
             # print(p.name)
             p.profile()
         self.bucketize()
-        self.benchmark()
+        benched = self.benchmark()
+        self.simulate_price(benched)
 
     def benchmark(self):
         # Grading process
@@ -441,6 +458,7 @@ class ProfManager:
                 print("Companies which are below average are: ", end='')
             print("{} out of {} sample".format(v, len(v)))
         print("Total companies sampled thus far is {}".format(len(self.companies)))
+        return final
 
     def bucketize(self):
         # TODO namedtuple?
@@ -524,6 +542,24 @@ class ProfManager:
             for avg_rate in RateType.above_avg, RateType.moderate_avg, RateType.below_avg:
                 articulate(v[avg_rate], avg_rate)
 
+    def simulate_price(self, benched):
+        print()
+        for k, v in benched.items():
+            if k in [RateType.above_avg, RateType.moderate_avg]:
+                for x in v:
+                    assert x in self.company
+                    if self.company[x].last_price is not None:
+                        print("{}'s last quote was {}. ".format(
+                            x, self.company[x].last_price['last_price']), end='')
+
+                        current = self.company[x].last_price['ev_over_ebit']
+                        record = self.company[x].prof[Tag.ev_over_ebit][0]
+                        diff = (current - record) / record
+                        if current < record:
+                            print("It is available at undemanding price at {:.2f} % based on EV / EBIT".format(diff*100))
+                        else:
+                            print("It is at premium valuation/overpriced at {:.2f} % based on EV / EBIT".format(diff*100))
+
 
 def main():
     path = "C:/Users/benny/iCloudDrive/Documents/malaysia reits"
@@ -552,6 +588,7 @@ def main():
         t.ebit_margin()
         t.ev_over_ebit()
         t.dividend_payout_ratio()
+        t.last_price()
         print()
 
     prof.profile()
