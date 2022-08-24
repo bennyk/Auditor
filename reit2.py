@@ -1,4 +1,5 @@
 from openpyxl import load_workbook, Workbook
+from openpyxl.styles import Font
 from typing import List, Tuple
 from collections import OrderedDict, namedtuple
 from enum import Enum
@@ -216,8 +217,27 @@ class Spread:
             avg_roce,
             list(map(lambda x: round(x, 2), roce))
         ))
-        # TODO ROCE in percent
+        # TODO ROCE is not defined
         self.profiler.collect(avg_roce/100, Tag.ROCE, ProfMethod.AveragePerc)
+
+    def return_invested_cap(self):
+        # ROIC = (nopat - tax) / (equity + debt - cash)
+        op_income = strip(self.income.match_title('Operating Income'))
+        # TODO need to fill-up the nil
+        # tax = strip(self.income.match_title('Income Tax Expense'))
+        nopat = op_income
+        debt = strip(self.balance.match_title('Total Debt$'))
+        equity = strip(self.balance.match_title('Total Equity$'))
+        cash = strip(self.balance.match_title('Cash And Equivalents$'))
+        _1 = list_add_list(debt, equity)
+        _2 = list_minus_list(_1, cash)
+        roic_per = list_over_list(nopat, _2, percent=True)
+        avg_roic_per = striped_average(roic_per)
+        print("Return on Invested Capital average {:.2f}% for: {}".format(
+            avg_roic_per,
+            list(map(lambda x: round(x, 2), roic_per))
+        ))
+        self.profiler.collect(avg_roic_per / 100, Tag.ROIC, ProfMethod.AveragePerc)
 
     def net_debt_over_ebit(self):
         net_debt = strip(self.balance.match_title('Net Debt'))
@@ -354,7 +374,9 @@ class Tag(Enum):
     rev_per_share = 1
     affo_per_share = 2
     nav_per_share = 3
-    ROCE = 4
+    # TODO ROCE is optional for tabulation.
+    # ROCE = 4
+    ROIC = 10
     net_debt_over_ebit = 5
     ebit_margin = 6
     retained_earnings_ratio = 7
@@ -398,7 +420,9 @@ class ProfManager:
     Rate = {Tag.rev_per_share: {'high': .08, 'mid': .04},
             Tag.affo_per_share: {'high': .3, 'mid': .05},
             Tag.nav_per_share: {'high': .08, 'mid': .05},
-            Tag.ROCE: {'high': .08, 'mid': .065},
+            # TODO ROCE is undefined
+            # Tag.ROCE: {'high': .08, 'mid': .065},
+            Tag.ROIC: {'high': .06, 'mid': .05},
             Tag.net_debt_over_ebit: {'high': 5., 'mid': 8.},
             Tag.ebit_margin: {'high': .7, 'mid': .6},
             Tag.retained_earnings_ratio: {'high': 5., 'mid': .0},
@@ -423,7 +447,63 @@ class ProfManager:
             p.profile()
         self.bucketize()
         benched = self.benchmark()
+        self.output(benched)
         self.simulate_price(benched)
+
+    def output(self, benched):
+        unit_ratio = (ProfMethod.AverageYears, ProfMethod.Ratio, ProfMethod.ReverseRatio)
+        ft = Font(name='Calibri', size=11)
+
+        wb = Workbook()
+        sheet = wb.active
+        sheet.title = 'sheet 1'
+        cell = sheet.cell(row=1, column=1)
+        cell.value = 'Company'
+
+        j = 1
+        i = 2
+        for x in Tag:
+            cell = sheet.cell(row=j, column=i)
+            cell.value = x.name
+            i += 1
+
+        cell = sheet.cell(row=j, column=i)
+        cell.value = 'color'
+        j += 1
+        for c in self.companies:
+            i = 1
+            cell = sheet.cell(row=j, column=i)
+            cell.value = c.name
+
+            i += 1
+            for x in Tag:
+                cell = sheet.cell(row=j, column=i)
+                i += 1
+                if x in c.prof:
+                    cell.value = c.prof[x][0]
+                    if c.prof[x][1] in unit_ratio:
+                        cell.style = 'Comma'
+                        cell.number_format = '0.00'
+                        cell.font = ft
+                    else:
+                        cell.style = 'Percent'
+                        cell.number_format = '0.00%'
+                        cell.font = ft
+                else:
+                    cell.value = 'nil'
+
+            if c.name in benched[RateType.above_avg]:
+                color = 0
+            elif c.name in benched[RateType.moderate_avg]:
+                color = 1
+            else:
+                color = 2
+            cell = sheet.cell(row=j, column=i)
+            cell.value = color
+            i += 1
+
+            j += 1
+        wb.save('output.xlsx')
 
     def benchmark(self):
         # Grading process
@@ -522,7 +602,8 @@ class ProfManager:
                 # TODO modify current "performed above average rate"
                 #  to "below the average over the last 10 years sampled, at undemanding rate"
                 print("{}/{} companies sampled have performed {} average rate of {} {:.2f}{}. ".format(
-                    len(buckets), len(self.companies), RateVerbose[key], ProfVerbose[method], average(values) * unit.value, unit.symbol), end='')
+                    len(buckets), len(self.companies), RateVerbose[key], ProfVerbose[method],
+                    average(values) * unit.value, unit.symbol), end='')
                 if key is RateType.above_avg:
                     print("These companies are: {}".format(comp_at_perc))
                     # TODO apply() function?
@@ -602,7 +683,8 @@ def main():
         # t.cfo()
         t.affo()
         t.nav()
-        t.return_equity()
+        # t.return_equity()
+        t.return_invested_cap()
         t.net_debt_over_ebit()
         t.retained_earnings_ratio()
         t.ebit_margin()
