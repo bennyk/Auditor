@@ -430,6 +430,8 @@ class ProfManager:
             Tag.ev_over_ebit: {'high': 16., 'mid': 18.},
             }
 
+    UnitRatio = (ProfMethod.AverageYears, ProfMethod.Ratio, ProfMethod.ReverseRatio)
+
     def __init__(self):
         self.companies = []     # type: List[Prof]
         self.company = {}
@@ -447,11 +449,10 @@ class ProfManager:
             p.profile()
         self.bucketize()
         benched = self.benchmark()
-        self.output(benched)
-        self.simulate_price(benched)
+        self.output(benched['score'])
+        self.simulate_price(benched['comp'])
 
     def output(self, benched):
-        unit_ratio = (ProfMethod.AverageYears, ProfMethod.Ratio, ProfMethod.ReverseRatio)
         ft = Font(name='Calibri', size=11)
 
         wb = Workbook()
@@ -481,7 +482,7 @@ class ProfManager:
                 i += 1
                 if x in c.prof:
                     cell.value = c.prof[x][0]
-                    if c.prof[x][1] in unit_ratio:
+                    if c.prof[x][1] in ProfManager.UnitRatio:
                         cell.style = 'Comma'
                         cell.number_format = '0.00'
                         cell.font = ft
@@ -492,14 +493,9 @@ class ProfManager:
                 else:
                     cell.value = 'nil'
 
-            if c.name in benched[RateType.above_avg]:
-                color = 0
-            elif c.name in benched[RateType.moderate_avg]:
-                color = 1
-            else:
-                color = 2
             cell = sheet.cell(row=j, column=i)
-            cell.value = color
+            cell.value = benched[c.name]
+            cell.number_format = '0.0'
             i += 1
 
             j += 1
@@ -541,7 +537,7 @@ class ProfManager:
                 print("Companies which are below average are: ", end='')
             print("{} out of {} sample".format(v, len(v)))
         print("Total companies sampled thus far is {}".format(len(self.companies)))
-        return final
+        return {'comp': final, 'score': met}
 
     def bucketize(self):
         # TODO namedtuple?
@@ -585,10 +581,9 @@ class ProfManager:
                 #  1 == value of percent, years, etc.,
                 #  2 == name of method see ProfMethod class
                 method = buckets[0].method
-                unit_ratio = (ProfMethod.AverageYears, ProfMethod.Ratio, ProfMethod.ReverseRatio)
 
                 def at(k):
-                    if method in unit_ratio:
+                    if method in ProfManager.UnitRatio:
                         return '{} at {:.2f} yrs'.format(k[0], k[1])
                     return '{} at {:.2f}%'.format(k[0], k[1] * 100)
 
@@ -596,7 +591,7 @@ class ProfManager:
                 comp_at_perc = ', '.join(list(map(at, items)))
 
                 unit = Unit(value=100, symbol='%')
-                if method in unit_ratio:
+                if method in ProfManager.UnitRatio:
                     unit = Unit(value=1, symbol='')
 
                 # TODO modify current "performed above average rate"
@@ -608,13 +603,16 @@ class ProfManager:
                     print("These companies are: {}".format(comp_at_perc))
                     # TODO apply() function?
                     for a in buckets:
+                        assert a.score is None
                         a.score = 1.
                 elif key is RateType.moderate_avg:
                     print("These companies are: {}".format(comp_at_perc))
                     for a in buckets:
+                        assert a.score is None
                         a.score = .5
                 else:
                     for a in buckets:
+                        assert a.score is None
                         a.score = 0
                     print()
 
