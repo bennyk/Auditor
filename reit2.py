@@ -1,5 +1,6 @@
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font
+from openpyxl.worksheet import worksheet
 from typing import List, Tuple
 from collections import OrderedDict, namedtuple
 from enum import Enum
@@ -406,6 +407,56 @@ class Prof:
             if k is not str:
                 self.prof[k] = v
 
+    def compute_price(self, sheet: worksheet, j: int, i: int):
+        ft = Font(name='Calibri', size=11)
+
+        cell = sheet.cell(row=j, column=i)
+        cell.style = 'Comma'
+        cell.number_format = '0.00'
+        if self.last_price is None:
+            return
+        current = self.last_price['ev_over_ebit']
+        cell.value = current
+        cell.font = ft
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.style = 'Percent'
+        cell.number_format = '0.00%'
+        record = self.prof[Tag.ev_over_ebit][0]
+        diff = (current - record) / record
+        cell.value = diff
+        cell.font = ft
+        # ev_over_ebit_incr = 'undemanding price' \
+        #     if current < record else 'premium valuation/overpriced'
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.style = 'Percent'
+        cell.number_format = '0.00%'
+        last_div_yield = self.last_price['last_div_yield']
+        cell.value = last_div_yield
+        cell.font = ft
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.style = 'Percent'
+        cell.number_format = '0.00%'
+        div_yields = list(
+            map(lambda z: 0 if z is None else z, self.last_price['div_yields']))
+        avg_div_yield = average(div_yields)
+        cell.value = avg_div_yield
+        cell.font = ft
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.style = 'Percent'
+        cell.number_format = '0.00%'
+        dy_incr = (last_div_yield - avg_div_yield) / avg_div_yield
+        cell.value = dy_incr
+        cell.font = ft
+        # trend = 'upside +' if dy_incr > 0 else 'downside '
+
 
 class Bucket:
     def __init__(self, name, value, method):
@@ -449,8 +500,8 @@ class ProfManager:
             p.profile()
         self.bucketize()
         benched = self.benchmark()
-        self.output(benched['score'])
         self.simulate_price(benched['comp'])
+        self.output(benched)
 
     def output(self, benched):
         ft = Font(name='Calibri', size=11)
@@ -470,6 +521,27 @@ class ProfManager:
 
         cell = sheet.cell(row=j, column=i)
         cell.value = 'color'
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.value = 'last ev_over_ebit'
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.value = 'diff ev_over_ebit'
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.value = 'last div yield'
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.value = 'avg div yield'
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.value = 'incr div yield'
+
         j += 1
         for c in self.companies:
             i = 1
@@ -494,10 +566,11 @@ class ProfManager:
                     cell.value = 'nil'
 
             cell = sheet.cell(row=j, column=i)
-            cell.value = benched[c.name]
+            cell.value = benched['score'][c.name]
             cell.number_format = '0.0'
             i += 1
 
+            c.compute_price(sheet, j, i)
             j += 1
         wb.save('output.xlsx')
 
@@ -642,8 +715,8 @@ class ProfManager:
                             ev_over_ebit_incr = 'undemanding price'\
                                 if current < record else 'premium valuation/overpriced'
                             trend = '+' if diff > 0 else ''
-                            print("- Last EV over EBIT was {current:.2f} %,"
-                                  " average was {record:.2f} %, valued at {ev_over_ebit_incr} after {diff:.2f} pts"
+                            print("- Last EV over EBIT was {current:.2f},"
+                                  " average was {record:.2f}, valued at {ev_over_ebit_incr} after {diff:.2f} pts"
                                   .format(ev_over_ebit_incr=ev_over_ebit_incr, trend=trend,
                                           diff=diff*100, record=record, current=current))
 
