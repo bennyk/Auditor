@@ -1,6 +1,8 @@
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font
 from openpyxl.worksheet import worksheet
+# from openpyxl.styles.differential import DifferentialStyle
+from openpyxl.formatting.rule import ColorScaleRule, CellIsRule, FormulaRule
 from typing import List, Tuple
 from collections import OrderedDict, namedtuple
 from enum import Enum
@@ -379,10 +381,10 @@ class Tag(Enum):
     # ROCE = 4
     ROIC = 10
     net_debt_over_ebit = 5
+    ev_over_ebit = 9
     ebit_margin = 6
     retained_earnings_ratio = 7
     dividend_payout_ratio = 8
-    ev_over_ebit = 9
 
 
 class Prof:
@@ -503,14 +505,81 @@ class ProfManager:
         self.simulate_price(benched['comp'])
         self.output(benched)
 
+    # Red = 'FF0000'
+    # Yellow = 'FFFF00'
+    # Green = '00FF00'
+
+    # Rainbow Pastels Color Scheme
+    # https://mappingmemories.ca/combfkiu2426925
+    Red = 'FF9AA2'
+    Yellow = 'FFDAC1'
+    # Green = 'E2F0CB'
+    Green = 'B5EAD7'
+
+    # STABILO Boss Pastel colors palette | ColorsWall
+    # Red = 'F6AA90'
+    # Yellow = 'F8DF81'
+    # Green = '9BDB07'
+
+    def add_color_palette(self, sheet: worksheet.Worksheet):
+        # general
+        gen_rule = ColorScaleRule(start_type='percentile', start_value=10, start_color=ProfManager.Red,
+                                  mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
+                                  end_type='percentile', end_value=90, end_color=ProfManager.Green)
+        rule = {
+            # net_debt_over_ebit
+            Tag.net_debt_over_ebit:
+                ColorScaleRule(start_type='num', start_value=1., start_color=ProfManager.Green,
+                               mid_type='num', mid_value=8., mid_color=ProfManager.Yellow,
+                               end_type='num', end_value=10., end_color=ProfManager.Red),
+            # EV/EBIT
+            Tag.ev_over_ebit:
+                ColorScaleRule(start_type='num', start_value=15., start_color=ProfManager.Green,
+                               mid_type='num', mid_value=18., mid_color=ProfManager.Yellow,
+                               end_type='num', end_value=25., end_color=ProfManager.Red),
+            # diff EV/EBIT
+            'diff-ev_over_ebit':
+                ColorScaleRule(start_type='percentile', start_value=90, start_color=ProfManager.Green,
+                               mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
+                               end_type='percentile', end_value=10, end_color=ProfManager.Red)
+        }
+
+        offset = 2
+        start_row_index = offset
+        end_row_index = len(self.companies)+1
+        for i, x in enumerate(Tag):
+            r = gen_rule
+            if x in rule:
+                r = rule[x]
+            a = colnum_string(i+offset)
+            sheet.conditional_formatting.add('{}{}:{}{}'.format(a, start_row_index, a, end_row_index), r)
+
+        # Adding accessories column in the table.
+
+        # color
+        sheet.conditional_formatting.add('K{}:K{}'.format(start_row_index, end_row_index), gen_rule)
+
+        # Last EV/EBIT
+        sheet.conditional_formatting.add('L{}:L{}'.format(start_row_index, end_row_index), rule[Tag.ev_over_ebit])
+
+        # diff EV/EBIT
+        sheet.conditional_formatting.add('M{}:M{}'.format(start_row_index, end_row_index),
+                                         rule['diff-ev_over_ebit'])
+
+        # Last div yield
+        sheet.conditional_formatting.add('N{}:N{}'.format(start_row_index, end_row_index), gen_rule)
+
+        # Avg div yield
+        sheet.conditional_formatting.add('O{}:O{}'.format(start_row_index, end_row_index), gen_rule)
+
     def output(self, benched):
         ft = Font(name='Calibri', size=11)
 
         wb = Workbook()
-        sheet = wb.active
+        sheet = wb.active   # type: worksheet.Worksheet
         sheet.title = 'sheet 1'
+        self.add_color_palette(sheet)
         cell = sheet.cell(row=1, column=1)
-        cell.value = 'Company'
 
         j = 1
         i = 2
