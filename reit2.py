@@ -93,7 +93,7 @@ class Table:
                     break
                 last_limit = j+1
         except TypeError:
-            Table.col_limit = last_limit+1
+            Table.col_limit = last_limit
 
         self.tab = []
         for i in range(1, max_row):
