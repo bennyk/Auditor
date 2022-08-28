@@ -224,16 +224,20 @@ class Spread:
         self.profiler.collect(avg_roce/100, Tag.ROCE, ProfMethod.AveragePerc)
 
     def return_invested_cap(self):
-        # ROIC = (nopat - tax) / (equity + debt - cash)
+        # ROIC = (nopat - tax) / (equity + debt + cash)
+        # https://www.educba.com/invested-capital-formula/
         op_income = strip(self.income.match_title('Operating Income'))
         # TODO need to fill-up the nil
         # tax = strip(self.income.match_title('Income Tax Expense'))
         nopat = op_income
         debt = strip(self.balance.match_title('Total Debt$'))
         equity = strip(self.balance.match_title('Total Equity$'))
-        cash = strip(self.balance.match_title('Cash And Equivalents$'))
+        cash = strip(self.cashflow.match_title('Cash from Investing$'))
+        cash = list_add_list(
+            strip(self.cashflow.match_title('Cash from Financing$')), cash)
+
         _1 = list_add_list(debt, equity)
-        _2 = list_minus_list(_1, cash)
+        _2 = list_add_list(_1, cash)
         roic_per = list_over_list(nopat, _2, percent=True)
         avg_roic_per = striped_average(roic_per)
         print("Return on Invested Capital average {:.2f}% for: {}".format(
