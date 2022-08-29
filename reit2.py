@@ -307,7 +307,7 @@ class Spread:
             avg_retention_ratio,
             list(map(lambda x: round(x, 2), retention_ratio))
         ))
-        self.profiler.collect(last_retention_ratio, Tag.retained_earnings_ratio, ProfMethod.Ratio)
+        self.profiler.collect(avg_retention_ratio, Tag.retained_earnings_ratio, ProfMethod.Ratio)
 
     def dividend_payout_ratio(self):
         div_paid = strip(self.cashflow.match_title('Common Dividends Paid'))
@@ -336,6 +336,13 @@ class Spread:
             list(map(lambda x: round(x, 2), div_payout_ratio))
         ))
         self.profiler.collect(avg_div_payout_ratio, Tag.dividend_payout_ratio, ProfMethod.Average)
+
+    def div_yield(self):
+        div_yields = list(map(
+            lambda z: 0 if z is None else z, strip2(self.values.match_title('LTM Dividend Yield$')))
+        )
+        avg_div_yield = average(div_yields)
+        self.profiler.collect(avg_div_yield, Tag.dividend_yield, ProfMethod.Average)
 
     def last_price(self):
         if self.values is None:
@@ -383,12 +390,13 @@ class Tag(Enum):
     nav_per_share = 3
     # TODO ROCE is optional for tabulation.
     # ROCE = 4
-    ROIC = 10
-    net_debt_over_ebit = 5
-    ev_over_ebit = 9
-    ebit_margin = 6
-    retained_earnings_ratio = 7
-    dividend_payout_ratio = 8
+    ROIC = 5
+    net_debt_over_ebit = 6
+    ev_over_ebit = 7
+    ebit_margin = 8
+    retained_earnings_ratio = 9
+    # dividend_payout_ratio = 8
+    dividend_yield = 11
 
 
 class Prof:
@@ -483,7 +491,8 @@ class ProfManager:
             Tag.net_debt_over_ebit: {'high': 5., 'mid': 8.},
             Tag.ebit_margin: {'high': .7, 'mid': .6},
             Tag.retained_earnings_ratio: {'high': 5., 'mid': .0},
-            Tag.dividend_payout_ratio: {'high': 1.5, 'mid': 1.},
+            # Tag.dividend_payout_ratio: {'high': 1.5, 'mid': 1.},
+            Tag.dividend_yield: {'high': .07, 'mid': .05},
             Tag.ev_over_ebit: {'high': 16., 'mid': 18.},
             }
 
@@ -833,7 +842,8 @@ def main():
         t.retained_earnings_ratio()
         t.ebit_margin()
         t.ev_over_ebit()
-        t.dividend_payout_ratio()
+        # t.dividend_payout_ratio()
+        t.div_yield()
         t.last_price()
         print()
 
@@ -842,3 +852,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# TODO Add EPU column for earnings per unit.
+# TODO dedicate column for latest result based on last_***
