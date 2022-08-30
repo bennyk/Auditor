@@ -161,6 +161,16 @@ class Spread:
 
         self.profiler.collect(rev_per_share, Tag.rev_per_share, ProfMethod.CAGR)
 
+    def epu(self):
+        ebt_exclude_unusual = strip(self.income.match_title('EBT Excl. Unusual Items'))
+        shares_outstanding = strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
+        epu = list_over_list(ebt_exclude_unusual, shares_outstanding)
+        cagr_epu = cagr(epu)
+        print("EPU from {:.2f} to {:.2f} at CAGR {:.2f}% for: {}".format(
+            epu[0]*100, epu[-1]*100,
+            cagr_epu*100, epu))
+        self.profiler.collect(cagr_epu, Tag.epu, ProfMethod.CAGR)
+
     def cfo(self):
         # aka FFO - Funds from Operations
         cfo = strip(self.cashflow.match_title('Cash from Operations'))
@@ -386,17 +396,18 @@ ProfVerbose = {ProfMethod.CAGR: 'CAGR',
 
 class Tag(Enum):
     rev_per_share = 1
-    affo_per_share = 2
-    nav_per_share = 3
+    epu = 2
+    affo_per_share = 3
+    nav_per_share = 4
     # TODO ROCE is optional for tabulation.
-    # ROCE = 4
-    ROIC = 5
-    net_debt_over_ebit = 6
-    ev_over_ebit = 7
-    ebit_margin = 8
-    retained_earnings_ratio = 9
-    # dividend_payout_ratio = 8
-    dividend_yield = 11
+    # ROCE = 5
+    ROIC = 6
+    net_debt_over_ebit = 7
+    ev_over_ebit = 8
+    ebit_margin = 9
+    retained_earnings_ratio = 10
+    # dividend_payout_ratio = 11
+    dividend_yield = 12
 
 
 class Prof:
@@ -483,6 +494,7 @@ class Bucket:
 class ProfManager:
     # TODO report about the underlying rate?
     Rate = {Tag.rev_per_share: {'high': .08, 'mid': .04},
+            Tag.epu: {'high': .1, 'mid': .0},
             Tag.affo_per_share: {'high': .3, 'mid': .05},
             Tag.nav_per_share: {'high': .08, 'mid': .05},
             # TODO ROCE is undefined
@@ -570,20 +582,20 @@ class ProfManager:
         # Adding accessories column in the table.
 
         # color
-        sheet.conditional_formatting.add('K{}:K{}'.format(start_row_index, end_row_index), gen_rule)
+        sheet.conditional_formatting.add('L{}:L{}'.format(start_row_index, end_row_index), gen_rule)
 
         # Last EV/EBIT
-        sheet.conditional_formatting.add('L{}:L{}'.format(start_row_index, end_row_index), rule[Tag.ev_over_ebit])
+        sheet.conditional_formatting.add('M{}:M{}'.format(start_row_index, end_row_index), rule[Tag.ev_over_ebit])
 
         # diff EV/EBIT
-        sheet.conditional_formatting.add('M{}:M{}'.format(start_row_index, end_row_index),
+        sheet.conditional_formatting.add('N{}:N{}'.format(start_row_index, end_row_index),
                                          rule['diff-ev_over_ebit'])
 
         # Last div yield
-        sheet.conditional_formatting.add('N{}:N{}'.format(start_row_index, end_row_index), gen_rule)
+        sheet.conditional_formatting.add('O{}:O{}'.format(start_row_index, end_row_index), gen_rule)
 
         # Avg div yield
-        sheet.conditional_formatting.add('O{}:O{}'.format(start_row_index, end_row_index), gen_rule)
+        sheet.conditional_formatting.add('P{}:P{}'.format(start_row_index, end_row_index), gen_rule)
 
     def output(self, benched):
         ft = Font(name='Calibri', size=11)
@@ -674,9 +686,9 @@ class ProfManager:
 
         final = {RateType.above_avg: [], RateType.moderate_avg: [], RateType.below_avg: []}
         for k, v in met.items():
-            if v >= 5.:
+            if v >= 5.5:
                 x = final[RateType.above_avg]
-            elif v >= 4.:
+            elif v >= 4.5:
                 x = final[RateType.moderate_avg]
             else:
                 x = final[RateType.below_avg]
@@ -833,6 +845,7 @@ def main():
         pf = prof.create_folder(c)
         t = Spread(wb, c, pf)
         t.revenue()
+        t.epu()
         # t.cfo()
         t.affo()
         t.nav()
@@ -853,5 +866,5 @@ def main():
 if __name__ == '__main__':
     main()
 
-# TODO Add EPU column for earnings per unit.
 # TODO dedicate column for latest result based on last_***
+# TODO market cap
