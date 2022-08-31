@@ -151,15 +151,16 @@ class Spread:
 
     def revenue(self):
         revs = strip(self.income.match_title('Total Revenues'))
-        rev_per_share = cagr(list(map(lambda f: f / self.share_out_filing(), revs)))
+        rev_per_share = list(map(lambda f: f / self.share_out_filing(), revs))
+        cagr_rev_per_share = cagr(rev_per_share)
         print("Revenue per share from {} to {} at CAGR {:.2f}% for: {}".format(
             revs[0], revs[-1],
-            rev_per_share * 100, revs))
-        if abs(cagr(revs) - rev_per_share) > .01:
+            cagr_rev_per_share * 100, revs))
+        if abs(cagr(revs) - cagr_rev_per_share) > .01:
             print("   Revenue {:.2f} in percent vs {:.2f} on per share basis".format(
-                rev_per_share * 100, rev_per_share * 100))
+                cagr_rev_per_share * 100, cagr_rev_per_share * 100))
 
-        self.profiler.collect(rev_per_share, Tag.rev_per_share, ProfMethod.CAGR)
+        self.profiler.collect(cagr_rev_per_share, revs[-1], Tag.rev_per_share, ProfMethod.CAGR)
 
     def epu(self):
         ebt_exclude_unusual = strip(self.income.match_title('EBT Excl. Unusual Items'))
@@ -169,19 +170,20 @@ class Spread:
         print("EPU from {:.2f} to {:.2f} at CAGR {:.2f}% for: {}".format(
             epu[0]*100, epu[-1]*100,
             cagr_epu*100, epu))
-        self.profiler.collect(cagr_epu, Tag.epu, ProfMethod.CAGR)
+        self.profiler.collect(cagr_epu, epu[-1], Tag.epu, ProfMethod.CAGR)
 
     def cfo(self):
         # aka FFO - Funds from Operations
         cfo = strip(self.cashflow.match_title('Cash from Operations'))
-        cfo_per_share = cagr(list(map(lambda f: f / self.share_out_filing(), cfo)))
+        cfo_per_share = list(map(lambda f: f / self.share_out_filing(), cfo))
+        cagr_cfo_per_share = cagr(cfo_per_share)
         print("FCF per share from {} to {} at CAGR {:.2f}% for: {}".format(
             cfo[0], cfo[-1],
-            cfo_per_share * 100, cfo))
-        if abs(cagr(cfo) - cfo_per_share) > .01:
+            cagr_cfo_per_share * 100, cfo))
+        if abs(cagr(cfo) - cagr_cfo_per_share) > .01:
             print("   FCF {:.2f} in percent vs {:.2f} on per share basis".format(
-                cfo_per_share*100, cfo_per_share * 100))
-        self.profiler.collect(cfo_per_share, 'cfo_per_share', ProfMethod.CAGR)
+                cagr_cfo_per_share*100, cagr_cfo_per_share * 100))
+        self.profiler.collect(cagr_cfo_per_share, cfo[-1], 'cfo_per_share', ProfMethod.CAGR)
 
     def affo(self):
         cfo = strip(self.cashflow.match_title('Cash from Operations'))
@@ -199,15 +201,19 @@ class Spread:
         term_period = 0
 
         # reversed - Simulate in reversed order from current to far past year.
+        last_term = None
         for i, a in enumerate(reversed(affo)):
-            term_period += a/(1+irr)**(i+1)
+            last_term = a/(1+irr)**(i+1)
+            term_period += last_term
         # print("XXX", term_period, term_period/self.share_out_filing())
+        last_term_period_over_shares = last_term / share_out_filing
         avg_term_period_over_shares = term_period / share_out_filing
         print("AFFO in relation to IGBREIT, at IRR {:.4f} for: {}".format(
             avg_term_period_over_shares,
             list(map(lambda x: round(x, 4), affo_per_share))
         ))
-        self.profiler.collect(avg_term_period_over_shares, Tag.affo_per_share, ProfMethod.IRR)
+        self.profiler.collect(avg_term_period_over_shares, last_term_period_over_shares,
+                              Tag.affo_per_share, ProfMethod.IRR)
 
     def nav(self):
         total_asset = strip(self.balance.match_title('Total Assets'))
@@ -219,7 +225,7 @@ class Spread:
             avg_nav_per_share*100,
             list(map(lambda x: round(x, 4), nav_per_share)),
         ))
-        self.profiler.collect(avg_nav_per_share, Tag.nav_per_share, ProfMethod.CAGR)
+        self.profiler.collect(avg_nav_per_share, nav_per_share[-1], Tag.nav_per_share, ProfMethod.CAGR)
 
     def return_equity(self):
         net_income = strip(self.income.match_title('Net Income$'))
@@ -231,7 +237,7 @@ class Spread:
             list(map(lambda x: round(x, 2), roce))
         ))
         # TODO ROCE is not defined
-        self.profiler.collect(avg_roce/100, Tag.ROCE, ProfMethod.AveragePerc)
+        self.profiler.collect(avg_roce/100, roce[-1], Tag.ROCE, ProfMethod.AveragePerc)
 
     def return_invested_cap(self):
         # ROIC = (nopat - tax) / (equity + debt + cash)
@@ -254,7 +260,7 @@ class Spread:
             avg_roic_per,
             list(map(lambda x: round(x, 2), roic_per))
         ))
-        self.profiler.collect(avg_roic_per / 100, Tag.ROIC, ProfMethod.AveragePerc)
+        self.profiler.collect(avg_roic_per/100, roic_per[-1]/100, Tag.ROIC, ProfMethod.AveragePerc)
 
     def net_debt_over_ebit(self):
         net_debt = strip(self.balance.match_title('Net Debt'))
@@ -266,7 +272,8 @@ class Spread:
             avg_net_debt_over_ebit,
             list(map(lambda x: round(x, 2), net_debt_over_ebit))
         ))
-        self.profiler.collect(avg_net_debt_over_ebit, Tag.net_debt_over_ebit, ProfMethod.AverageYears)
+        self.profiler.collect(avg_net_debt_over_ebit, net_debt_over_ebit[-1],
+                              Tag.net_debt_over_ebit, ProfMethod.AverageYears)
 
     def ebit_margin(self):
         ebits = strip(self.income.match_title('Operating Income$'))
@@ -277,7 +284,8 @@ class Spread:
             avg_ebit_margins,
             list(map(lambda x: round(x, 2), ebit_margins))
         ))
-        self.profiler.collect(avg_ebit_margins/100, Tag.ebit_margin, ProfMethod.AveragePerc)
+        self.profiler.collect(avg_ebit_margins/100, ebit_margins[-1],
+                              Tag.ebit_margin, ProfMethod.AveragePerc)
 
     def ev_over_ebit(self):
         if self.values is None:
@@ -290,7 +298,8 @@ class Spread:
             avg_ev_over_ebit,
             list(map(lambda x: round(x, 2), ev_over_ebit))
         ))
-        self.profiler.collect(avg_ev_over_ebit, Tag.ev_over_ebit, ProfMethod.ReverseRatio)
+        self.profiler.collect(avg_ev_over_ebit, ev_over_ebit[-1],
+                              Tag.ev_over_ebit, ProfMethod.ReverseRatio)
 
     # TODO retined earnings pay in advance for one year?
     def retained_earnings_ratio(self):
@@ -317,7 +326,8 @@ class Spread:
             avg_retention_ratio,
             list(map(lambda x: round(x, 2), retention_ratio))
         ))
-        self.profiler.collect(avg_retention_ratio, Tag.retained_earnings_ratio, ProfMethod.Ratio)
+        self.profiler.collect(avg_retention_ratio, last_retention_ratio,
+                              Tag.retained_earnings_ratio, ProfMethod.Ratio)
 
     def dividend_payout_ratio(self):
         div_paid = strip(self.cashflow.match_title('Common Dividends Paid'))
@@ -345,14 +355,15 @@ class Spread:
             avg_div_payout_ratio,
             list(map(lambda x: round(x, 2), div_payout_ratio))
         ))
-        self.profiler.collect(avg_div_payout_ratio, Tag.dividend_payout_ratio, ProfMethod.Average)
+        self.profiler.collect(avg_div_payout_ratio, - div_payout_ratio[-1],
+                              Tag.dividend_payout_ratio, ProfMethod.Average)
 
     def div_yield(self):
         div_yields = list(map(
             lambda z: 0 if z is None else z, strip2(self.values.match_title('LTM Dividend Yield$')))
         )
         avg_div_yield = average(div_yields)
-        self.profiler.collect(avg_div_yield, Tag.dividend_yield, ProfMethod.Average)
+        self.profiler.collect(avg_div_yield, div_yields[-1], Tag.dividend_yield, ProfMethod.Average)
 
     def last_price(self):
         if self.values is None:
@@ -418,10 +429,10 @@ class Prof:
 
         self.prof = {}
 
-    def collect(self, val, tag, method: ProfMethod):
+    def collect(self, val1, val2, tag, method: ProfMethod):
         # self.d[tag.__name__] = ratio
         # type: Tuple[float, ProfMethod]
-        _ = (val, method)
+        _ = OrderedDict(val1=val1, val2=val2, method=method)
         self.d[tag] = _
 
     def collect_last_price(self, last_price):
@@ -437,50 +448,44 @@ class Prof:
 
         cell = sheet.cell(row=j, column=i)
         cell.style = 'Comma'
+        cell.number_format = '0,00'
+        cell.value = 100*self.d[Tag.rev_per_share]['val2']
+        cell.font = ft
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.style = 'Comma'
         cell.number_format = '0.00'
-        if self.last_price is None:
-            return
-        current = self.last_price['ev_over_ebit']
-        cell.value = current
+        cell.value = 100*self.d[Tag.epu]['val2']
+        cell.font = ft
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.style = 'Comma'
+        cell.number_format = '0.00'
+        cell.value = self.d[Tag.ev_over_ebit]['val2']
         cell.font = ft
 
         i += 1
         cell = sheet.cell(row=j, column=i)
         cell.style = 'Percent'
         cell.number_format = '0.00%'
-        record = self.prof[Tag.ev_over_ebit][0]
-        diff = (current - record) / record
-        cell.value = diff
-        cell.font = ft
-        # ev_over_ebit_incr = 'undemanding price' \
-        #     if current < record else 'premium valuation/overpriced'
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.style = 'Percent'
-        cell.number_format = '0.00%'
-        last_div_yield = self.last_price['last_div_yield']
-        cell.value = last_div_yield
+        cell.value = self.d[Tag.dividend_yield]['val2']
         cell.font = ft
 
         i += 1
         cell = sheet.cell(row=j, column=i)
         cell.style = 'Percent'
         cell.number_format = '0.00%'
-        div_yields = list(
-            map(lambda z: 0 if z is None else z, self.last_price['div_yields']))
-        avg_div_yield = average(div_yields)
-        cell.value = avg_div_yield
+        cell.value = self.d[Tag.ROIC]['val2']
         cell.font = ft
 
         i += 1
         cell = sheet.cell(row=j, column=i)
-        cell.style = 'Percent'
-        cell.number_format = '0.00%'
-        dy_incr = (last_div_yield - avg_div_yield) / avg_div_yield
-        cell.value = dy_incr
+        cell.style = 'Comma'
+        cell.number_format = '0.00'
+        cell.value = self.d[Tag.net_debt_over_ebit]['val2']
         cell.font = ft
-        # trend = 'upside +' if dy_incr > 0 else 'downside '
 
 
 class Bucket:
@@ -576,26 +581,39 @@ class ProfManager:
             r = gen_rule
             if x in rule:
                 r = rule[x]
-            a = colnum_string(i+offset)
-            sheet.conditional_formatting.add('{}{}:{}{}'.format(a, start_row_index, a, end_row_index), r)
+            sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+                alpha=colnum_string(i+offset), start=start_row_index, end=end_row_index), r)
 
         # Adding accessories column in the table.
-
         # color
-        sheet.conditional_formatting.add('L{}:L{}'.format(start_row_index, end_row_index), gen_rule)
+        i = len(Tag) + offset
+        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+            alpha=colnum_string(i), start=start_row_index, end=end_row_index), gen_rule)
 
-        # Last EV/EBIT
-        sheet.conditional_formatting.add('M{}:M{}'.format(start_row_index, end_row_index), rule[Tag.ev_over_ebit])
+        # Skipping rev_per_share and epu
+        i += 2
 
-        # diff EV/EBIT
-        sheet.conditional_formatting.add('N{}:N{}'.format(start_row_index, end_row_index),
-                                         rule['diff-ev_over_ebit'])
+        # ev_over_ebit
+        i += 1
+        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+            alpha=colnum_string(i), start=start_row_index, end=end_row_index),
+            rule[Tag.ev_over_ebit])
 
-        # Last div yield
-        sheet.conditional_formatting.add('O{}:O{}'.format(start_row_index, end_row_index), gen_rule)
+        # dividend_yield
+        i += 1
+        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+            alpha=colnum_string(i), start=start_row_index, end=end_row_index), gen_rule)
 
-        # Avg div yield
-        sheet.conditional_formatting.add('P{}:P{}'.format(start_row_index, end_row_index), gen_rule)
+        # ROIC
+        i += 1
+        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+            alpha=colnum_string(i), start=start_row_index, end=end_row_index), gen_rule)
+
+        # net_debt_over_ebit
+        i += 1
+        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+            alpha=colnum_string(i), start=start_row_index, end=end_row_index),
+            rule[Tag.net_debt_over_ebit])
 
     def output(self, benched):
         ft = Font(name='Calibri', size=11)
@@ -618,23 +636,35 @@ class ProfManager:
 
         i += 1
         cell = sheet.cell(row=j, column=i)
-        cell.value = 'last ev_over_ebit'
+        cell.value = 'rev'
 
         i += 1
         cell = sheet.cell(row=j, column=i)
-        cell.value = 'diff ev_over_ebit'
+        cell.value = 'epu'
 
         i += 1
         cell = sheet.cell(row=j, column=i)
-        cell.value = 'last div yield'
+        cell.value = 'ev_over_ebit'
 
         i += 1
         cell = sheet.cell(row=j, column=i)
-        cell.value = 'avg div yield'
+        cell.value = 'dividend_yield'
 
         i += 1
         cell = sheet.cell(row=j, column=i)
-        cell.value = 'incr div yield'
+        cell.value = 'ROIC'
+
+        i += 1
+        cell = sheet.cell(row=j, column=i)
+        cell.value = 'net_debt_over_ebit'
+
+        # i += 1
+        # cell = sheet.cell(row=j, column=i)
+        # cell.value = 'diff ev_over_ebit'
+        #
+        # i += 1
+        # cell = sheet.cell(row=j, column=i)
+        # cell.value = 'incr div yield'
 
         j += 1
         for c in self.companies:
@@ -647,8 +677,8 @@ class ProfManager:
                 cell = sheet.cell(row=j, column=i)
                 i += 1
                 if x in c.prof:
-                    cell.value = c.prof[x][0]
-                    if c.prof[x][1] in ProfManager.UnitRatio:
+                    cell.value = c.prof[x]['val1']
+                    if c.prof[x]['method'] in ProfManager.UnitRatio:
                         cell.style = 'Comma'
                         cell.number_format = '0.00'
                         cell.font = ft
@@ -718,18 +748,18 @@ class ProfManager:
                     if k in ProfManager.Rate:
                         assert k in self.metric
                         buck = self.metric[k]
-                        tup = Bucket(c.name, v[0], v[1])
-                        if v[1] in (ProfMethod.AverageYears, ProfMethod.ReverseRatio):
-                            if v[0] < ProfManager.Rate[k]['high']:
+                        tup = Bucket(c.name, v['val1'], v['method'])
+                        if v['method'] in (ProfMethod.AverageYears, ProfMethod.ReverseRatio):
+                            if v['val1'] < ProfManager.Rate[k]['high']:
                                 buck[RateType.above_avg].append(tup)
-                            elif v[0] < ProfManager.Rate[k]['mid']:
+                            elif v['val1'] < ProfManager.Rate[k]['mid']:
                                 buck[RateType.moderate_avg].append(tup)
                             else:
                                 buck[RateType.below_avg].append(tup)
                         else:
-                            if v[0] > ProfManager.Rate[k]['high']:
+                            if v['val1'] > ProfManager.Rate[k]['high']:
                                 buck[RateType.above_avg].append(tup)
-                            elif v[0] > ProfManager.Rate[k]['mid']:
+                            elif v['val1'] > ProfManager.Rate[k]['mid']:
                                 buck[RateType.moderate_avg].append(tup)
                             else:
                                 buck[RateType.below_avg].append(tup)
@@ -804,7 +834,7 @@ class ProfManager:
                             print("{}'s last quote was {}: -".format(x, company.last_price['last_price']))
 
                             current = company.last_price['ev_over_ebit']
-                            record = company.prof[Tag.ev_over_ebit][0]
+                            record = company.prof[Tag.ev_over_ebit]['val1']
                             diff = (current - record) / record
                             ev_over_ebit_incr = 'undemanding price'\
                                 if current < record else 'premium valuation/overpriced'
@@ -814,6 +844,7 @@ class ProfManager:
                                   .format(ev_over_ebit_incr=ev_over_ebit_incr, trend=trend,
                                           diff=diff*100, record=record, current=current))
 
+                            # TODO refactored the block below
                             div_yields = list(map(lambda z: 0 if z is None else z, company.last_price['div_yields']))
                             avg_div_yield = average(div_yields)
                             dy_incr = 100 * (company.last_price['last_div_yield'] - avg_div_yield) / avg_div_yield
@@ -866,5 +897,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-# TODO dedicate column for latest result based on last_***
-# TODO market cap
+# TODO market cap, NPI, Net profit, DPU,
