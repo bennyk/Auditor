@@ -160,7 +160,7 @@ class Spread:
             print("   Revenue {:.2f} in percent vs {:.2f} on per share basis".format(
                 cagr_rev_per_share * 100, cagr_rev_per_share * 100))
 
-        self.profiler.collect(cagr_rev_per_share, revs[-1], Tag.rev_per_share, ProfMethod.CAGR)
+        self.profiler.collect(cagr_rev_per_share, None, Tag.rev_per_share, ProfMethod.CAGR)
 
     def epu(self):
         ebt_exclude_unusual = strip(self.income.match_title('EBT Excl. Unusual Items'))
@@ -372,12 +372,24 @@ class Spread:
 
         price = self.values.match_title('Price$')
         ev_over_ebit = strip2(self.values.match_title('LTM Total Enterprise Value / EBIT$'))
+        # TODO all div yields data?
         div_yield = strip2(self.values.match_title('LTM Dividend Yield$'))
+
+        market_cap = self.values.match_title('Market Cap')
+        rev = self.income.match_title('Total Revenues')
+        op_income = self.income.match_title('Operating Income')
+        net_profit = self.income.match_title('Net Income')
+        dpu = self.income.match_title('Dividends per share')
 
         self.profiler.collect_last_price({'last_price': price[-1],
                                           'ev_over_ebit': ev_over_ebit[-1],
                                           'last_div_yield': div_yield[-1],
-                                          'div_yields': div_yield, })
+                                          'div_yields': div_yield,
+                                          'market_cap': market_cap[-1],
+                                          'revenue': rev[-1],
+                                          'op_income': op_income[-1],
+                                          'net_profit': net_profit[-1],
+                                          'dpu': dpu[-1], })
 
     def share_out_filing(self) -> float:
         x = self.balance.match_title('Total Shares Out\.')
@@ -443,50 +455,6 @@ class Prof:
             if k is not str:
                 self.prof[k] = v
 
-    def compute_price(self, sheet: worksheet, j: int, i: int):
-        ft = Font(name='Calibri', size=11)
-
-        cell = sheet.cell(row=j, column=i)
-        cell.style = 'Comma'
-        cell.number_format = '0,00'
-        cell.value = 100*self.d[Tag.rev_per_share]['val2']
-        cell.font = ft
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.style = 'Comma'
-        cell.number_format = '0.00'
-        cell.value = 100*self.d[Tag.epu]['val2']
-        cell.font = ft
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.style = 'Comma'
-        cell.number_format = '0.00'
-        cell.value = self.d[Tag.ev_over_ebit]['val2']
-        cell.font = ft
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.style = 'Percent'
-        cell.number_format = '0.00%'
-        cell.value = self.d[Tag.dividend_yield]['val2']
-        cell.font = ft
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.style = 'Percent'
-        cell.number_format = '0.00%'
-        cell.value = self.d[Tag.ROIC]['val2']
-        cell.font = ft
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.style = 'Comma'
-        cell.number_format = '0.00'
-        cell.value = self.d[Tag.net_debt_over_ebit]['val2']
-        cell.font = ft
-
 
 class Bucket:
     def __init__(self, name, value, method):
@@ -551,8 +519,39 @@ class ProfManager:
     # Yellow = 'F8DF81'
     # Green = '9BDB07'
 
-    def add_color_palette(self, sheet: worksheet.Worksheet):
-        # general
+    def output(self, benched):
+        ft = Font(name='Calibri', size=11)
+
+        wb = Workbook()
+        sheet = wb.active   # type: worksheet.Worksheet
+        sheet.title = 'sheet 1'
+        cell = sheet.cell(row=1, column=1)
+
+        j = 1
+        i = 2
+        for x in Tag:
+            cell = sheet.cell(row=j, column=i)
+            cell.value = x.name
+            i += 1
+
+        # Ext to data based on Tag.
+        ext_header = ['market_cap', 'revenue', 'op_income', 'net_profit', 'epu', 'dpu',
+                      'ev_over_ebit', 'div_yield', 'ROIC', 'net_debt_over_ebit', 'color']
+        for x in range(len(ext_header)):
+            cell = sheet.cell(row=j, column=i+x)
+            cell.value = ext_header[x]
+        i += len(ext_header)
+
+        # TODO differential data, hmmm...
+        # i += 1
+        # cell = sheet.cell(row=j, column=i)
+        # cell.value = 'diff ev_over_ebit'
+        #
+        # i += 1
+        # cell = sheet.cell(row=j, column=i)
+        # cell.value = 'incr div yield'
+
+        # setting up color palette following
         gen_rule = ColorScaleRule(start_type='percentile', start_value=10, start_color=ProfManager.Red,
                                   mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
                                   end_type='percentile', end_value=90, end_color=ProfManager.Green)
@@ -573,128 +572,74 @@ class ProfManager:
                                mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
                                end_type='percentile', end_value=10, end_color=ProfManager.Red)
         }
-
-        offset = 2
-        start_row_index = offset
-        end_row_index = len(self.companies)+1
-        for i, x in enumerate(Tag):
-            r = gen_rule
-            if x in rule:
-                r = rule[x]
-            sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
-                alpha=colnum_string(i+offset), start=start_row_index, end=end_row_index), r)
-
-        # Adding accessories column in the table.
-        # color
-        i = len(Tag) + offset
-        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
-            alpha=colnum_string(i), start=start_row_index, end=end_row_index), gen_rule)
-
-        # Skipping rev_per_share and epu
-        i += 2
-
-        # ev_over_ebit
-        i += 1
-        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
-            alpha=colnum_string(i), start=start_row_index, end=end_row_index),
-            rule[Tag.ev_over_ebit])
-
-        # dividend_yield
-        i += 1
-        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
-            alpha=colnum_string(i), start=start_row_index, end=end_row_index), gen_rule)
-
-        # ROIC
-        i += 1
-        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
-            alpha=colnum_string(i), start=start_row_index, end=end_row_index), gen_rule)
-
-        # net_debt_over_ebit
-        i += 1
-        sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
-            alpha=colnum_string(i), start=start_row_index, end=end_row_index),
-            rule[Tag.net_debt_over_ebit])
-
-    def output(self, benched):
-        ft = Font(name='Calibri', size=11)
-
-        wb = Workbook()
-        sheet = wb.active   # type: worksheet.Worksheet
-        sheet.title = 'sheet 1'
-        self.add_color_palette(sheet)
-        cell = sheet.cell(row=1, column=1)
-
-        j = 1
-        i = 2
-        for x in Tag:
-            cell = sheet.cell(row=j, column=i)
-            cell.value = x.name
-            i += 1
-
-        cell = sheet.cell(row=j, column=i)
-        cell.value = 'color'
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.value = 'rev'
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.value = 'epu'
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.value = 'ev_over_ebit'
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.value = 'dividend_yield'
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.value = 'ROIC'
-
-        i += 1
-        cell = sheet.cell(row=j, column=i)
-        cell.value = 'net_debt_over_ebit'
-
-        # i += 1
-        # cell = sheet.cell(row=j, column=i)
-        # cell.value = 'diff ev_over_ebit'
-        #
-        # i += 1
-        # cell = sheet.cell(row=j, column=i)
-        # cell.value = 'incr div yield'
+        start_row_index = 1
+        end_row_index = len(self.companies) + 1
 
         j += 1
         for c in self.companies:
+            # Table of mainly profile and last_price data
+            lead = [
+                {'val': c.prof[Tag.rev_per_share]['val1'], 'rule': gen_rule},
+                {'val': c.prof[Tag.epu]['val1'], 'rule': gen_rule},
+                {'val': c.prof[Tag.affo_per_share]['val1'], 'rule': gen_rule},
+                {'val': c.prof[Tag.nav_per_share]['val1'], 'rule': gen_rule},
+                {'val': c.prof[Tag.ROIC]['val1'], 'rule': gen_rule},
+                {'val': c.prof[Tag.net_debt_over_ebit]['val1'], 'number': 'ratio',
+                 'rule': rule[Tag.net_debt_over_ebit]},
+                {'val': c.prof[Tag.ev_over_ebit]['val1'], 'number': 'ratio',
+                 'rule': rule[Tag.ev_over_ebit]},
+                {'val': c.prof[Tag.ebit_margin]['val1'], 'rule': gen_rule},
+                {'val': c.prof[Tag.retained_earnings_ratio]['val1'], 'number': 'ratio', 'rule': gen_rule},
+                {'val': c.prof[Tag.dividend_yield]['val1'], 'rule': gen_rule},
+                {'val': c.last_price['market_cap'], 'number': 'cap'},
+                {'val': c.last_price['revenue'], 'number': 'value'},
+                {'val': c.last_price['op_income'], 'number': 'value'},
+                {'val': c.last_price['net_profit'], 'number': 'value'},
+                {'val': c.prof[Tag.epu]['val2'], 'number': 'value'},
+                {'val': c.last_price['dpu'], 'number': 'value'},
+                {'val': c.prof[Tag.ev_over_ebit]['val2'], 'number': 'ratio',
+                 'rule': rule[Tag.ev_over_ebit]},
+                {'val': c.prof[Tag.dividend_yield]['val2'], 'rule': gen_rule},
+                {'val': c.prof[Tag.ROIC]['val2'], 'rule': gen_rule},
+                {'val': c.prof[Tag.net_debt_over_ebit]['val2'], 'number': 'ratio',
+                 'rule': rule[Tag.net_debt_over_ebit]},
+            ]
+
             i = 1
             cell = sheet.cell(row=j, column=i)
             cell.value = c.name
 
             i += 1
-            for x in Tag:
+            for x in lead:
                 cell = sheet.cell(row=j, column=i)
-                i += 1
-                if x in c.prof:
-                    cell.value = c.prof[x]['val1']
-                    if c.prof[x]['method'] in ProfManager.UnitRatio:
-                        cell.style = 'Comma'
-                        cell.number_format = '0.00'
-                        cell.font = ft
+                assert 'val' in x
+                cell.value = x['val']
+                if 'number' in x:
+                    cell.style = 'Comma'
+                    if x['number'] == 'cap':
+                        cell.number_format = '0,00'
                     else:
-                        cell.style = 'Percent'
-                        cell.number_format = '0.00%'
-                        cell.font = ft
+                        # set number format to value/ratio
+                        cell.number_format = '0.00'
                 else:
-                    cell.value = 'nil'
+                    cell.style = 'Percent'
+                    cell.number_format = '0.00%'
+                cell.font = ft
 
+                if 'rule' in x:
+                    sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+                        alpha=colnum_string(i), start=start_row_index, end=end_row_index),
+                        x['rule'])
+                i += 1
+
+            # adding last column for color
             cell = sheet.cell(row=j, column=i)
             cell.value = benched['score'][c.name]
             cell.number_format = '0.0'
+            sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+                alpha=colnum_string(i), start=start_row_index, end=end_row_index), gen_rule)
             i += 1
 
-            c.compute_price(sheet, j, i)
             j += 1
         wb.save('output.xlsx')
 
@@ -897,4 +842,5 @@ def main():
 if __name__ == '__main__':
     main()
 
-# TODO market cap, NPI, Net profit, DPU,
+# TODO current price data
+# TODO change EPU from RM to sen
