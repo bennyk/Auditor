@@ -170,7 +170,7 @@ class Spread:
         print("EPU from {:.2f} to {:.2f} at CAGR {:.2f}% for: {}".format(
             epu[0]*100, epu[-1]*100,
             cagr_epu*100, epu))
-        self.profiler.collect(cagr_epu, epu[-1], Tag.epu, ProfMethod.CAGR)
+        self.profiler.collect(cagr_epu, epu[-1]*100, Tag.epu, ProfMethod.CAGR)
 
     def cfo(self):
         # aka FFO - Funds from Operations
@@ -535,8 +535,8 @@ class ProfManager:
             i += 1
 
         # Ext to data based on Tag.
-        ext_header = ['market_cap', 'revenue', 'op_income', 'net_profit', 'epu', 'dpu',
-                      'ev_over_ebit', 'div_yield', 'ROIC', 'net_debt_over_ebit', 'color']
+        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'DPU',
+                      'EV over EBIT', 'Dividend yield', 'ROIC', 'Net debt over EBIT', 'color']
         for x in range(len(ext_header)):
             cell = sheet.cell(row=j, column=i+x)
             cell.value = ext_header[x]
@@ -591,6 +591,7 @@ class ProfManager:
                 {'val': c.prof[Tag.ebit_margin]['val1'], 'rule': gen_rule},
                 {'val': c.prof[Tag.retained_earnings_ratio]['val1'], 'number': 'ratio', 'rule': gen_rule},
                 {'val': c.prof[Tag.dividend_yield]['val1'], 'rule': gen_rule},
+                {'val': c.last_price['last_price'], 'number': 'value'},
                 {'val': c.last_price['market_cap'], 'number': 'cap'},
                 {'val': c.last_price['revenue'], 'number': 'value'},
                 {'val': c.last_price['op_income'], 'number': 'value'},
@@ -841,6 +842,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# TODO current price data
-# TODO change EPU from RM to sen
