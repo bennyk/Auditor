@@ -93,7 +93,7 @@ class Table:
                     break
                 last_limit = j+1
         except TypeError:
-            Table.col_limit = last_limit
+            Table.col_limit = last_limit+1
 
         self.tab = []
         for i in range(1, max_row):
@@ -106,13 +106,14 @@ class Table:
                 r.append(sheet_ranges[c1].value)
             self.tab.append(r)
 
-    def match_title(self, reg):
+    def match_title(self, reg, none_is_optional=False):
         result = None
         for _ in self.tab:
             if re.match(reg, _[0].strip()):
                 result = _
                 break
-        assert result is not None
+        if not none_is_optional:
+            assert result is not None
         return result
 
 
@@ -243,9 +244,12 @@ class Spread:
         # ROIC = (nopat - tax) / (equity + debt + cash)
         # https://www.educba.com/invested-capital-formula/
         op_income = strip(self.income.match_title('Operating Income'))
-        # TODO need to fill-up the nil
-        # tax = strip(self.income.match_title('Income Tax Expense'))
-        nopat = op_income
+        tax_not_strip = self.income.match_title('Income Tax Expense', none_is_optional=True)
+        if tax_not_strip is not None:
+            tax = strip(tax_not_strip)
+            nopat = list_minus_list(op_income, tax)
+        else:
+            nopat = op_income
         debt = strip(self.balance.match_title('Total Debt$'))
         equity = strip(self.balance.match_title('Total Equity$'))
         cash = strip(self.cashflow.match_title('Cash from Investing$'))
@@ -359,6 +363,10 @@ class Spread:
                               Tag.dividend_payout_ratio, ProfMethod.Average)
 
     def div_yield(self):
+        if self.values is None:
+            # TODO exception to EV over EBIT
+            print("Warning: dividend yield: Missing values tab.")
+            return
         div_yields = list(map(
             lambda z: 0 if z is None else z, strip2(self.values.match_title('LTM Dividend Yield$')))
         )
@@ -811,10 +819,11 @@ def main():
     tickers = ['axreit', 'igbreit', 'sunreit', 'pavreit', 'alaqar',
                'uoareit', 'hektar',
                'klcc', 'amfirst', 'ytlreit', 'arreit', 'clmt',
-               'twrreit', 'ahp', 'kipreit',
+               'twrreit', 'kipreit',
                'sentral', 'atrium', 'alsreit']
 
-    # tickers = [ 'clmt']
+    # TODO Adding TODO may need to fix AHP.
+    # tickers = [ 'ahp']
     # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ytlreit', 'ahp', 'atrium']
     for c in tickers:
         print('Ticker {}'.format(c))
