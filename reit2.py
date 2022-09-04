@@ -7,6 +7,7 @@ from typing import List, Tuple
 from collections import OrderedDict, namedtuple
 from enum import Enum
 import re
+import decimal
 
 max_row = max_col = 99
 
@@ -543,7 +544,7 @@ class ProfManager:
             i += 1
 
         # Ext to data based on Tag.
-        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'DPU',
+        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'DPU sen',
                       'EV over EBIT', 'Dividend yield', 'ROIC', 'Net debt over EBIT', 'color']
         for x in range(len(ext_header)):
             cell = sheet.cell(row=j, column=i+x)
@@ -599,13 +600,15 @@ class ProfManager:
                 {'val': c.prof[Tag.ebit_margin]['val1'], 'rule': gen_rule},
                 {'val': c.prof[Tag.retained_earnings_ratio]['val1'], 'number': 'ratio', 'rule': gen_rule},
                 {'val': c.prof[Tag.dividend_yield]['val1'], 'rule': gen_rule},
-                {'val': c.last_price['last_price'], 'number': 'value'},
+                # value2 to increase decimal point
+                {'val': c.last_price['last_price'], 'number': 'value2'},
                 {'val': c.last_price['market_cap'], 'number': 'cap'},
                 {'val': c.last_price['revenue'], 'number': 'value'},
                 {'val': c.last_price['op_income'], 'number': 'value'},
                 {'val': c.last_price['net_profit'], 'number': 'value'},
                 {'val': c.prof[Tag.epu]['val2'], 'number': 'value'},
-                {'val': c.last_price['dpu'], 'number': 'value'},
+                # x100 - KLSE/Bursa DPU use fractional pricing model
+                {'val': c.last_price['dpu']*100, 'number': 'value'},
                 {'val': c.prof[Tag.ev_over_ebit]['val2'], 'number': 'ratio',
                  'rule': rule[Tag.ev_over_ebit]},
                 {'val': c.prof[Tag.dividend_yield]['val2'], 'rule': gen_rule},
@@ -627,6 +630,12 @@ class ProfManager:
                     cell.style = 'Comma'
                     if x['number'] == 'cap':
                         cell.number_format = '0,00'
+                    elif x['number'] == 'value2':
+                        cell.number_format = '0.00'
+                        # test if we got enough decimal points
+                        # Decimal point can be enabled using DECIMALS TO DISPLAY in TIKR terminal
+                        if 0 != decimal.Decimal(c.last_price['last_price']*10**3).as_tuple().exponent:
+                            cell.number_format = '0.000'
                     else:
                         # set number format to value/ratio
                         cell.number_format = '0.00'
