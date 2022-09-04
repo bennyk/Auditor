@@ -579,7 +579,14 @@ class ProfManager:
             'diff-ev_over_ebit':
                 ColorScaleRule(start_type='percentile', start_value=90, start_color=ProfManager.Green,
                                mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
-                               end_type='percentile', end_value=10, end_color=ProfManager.Red)
+                               end_type='percentile', end_value=10, end_color=ProfManager.Red),
+            # Mid cap is between 200mil to 2bil.
+            # https://www.bursamalaysia.com/trade/our_products_services/indices/ftse_bursa_malaysia_indices/overview
+            'market_cap':
+            # https://colorhunt.co/palette/f7ecdee9dac19ed2c654bab9
+                ColorScaleRule(start_type='percentile', start_value=90, start_color='F7ECDE',
+                               mid_type='percentile', mid_value=20, mid_color='E9DAC1',
+                               end_type='percentile', end_value=10, end_color='54BAB9'),
         }
         start_row_index = 1
         end_row_index = len(self.companies) + 1
@@ -602,7 +609,7 @@ class ProfManager:
                 {'val': c.prof[Tag.dividend_yield]['val1'], 'rule': gen_rule},
                 # value2 to increase decimal point
                 {'val': c.last_price['last_price'], 'number': 'value2'},
-                {'val': c.last_price['market_cap'], 'number': 'cap'},
+                {'val': c.last_price['market_cap'], 'number': 'cap', 'rule': rule['market_cap']},
                 {'val': c.last_price['revenue'], 'number': 'value'},
                 {'val': c.last_price['op_income'], 'number': 'value'},
                 {'val': c.last_price['net_profit'], 'number': 'value'},
