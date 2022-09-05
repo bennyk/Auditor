@@ -187,7 +187,7 @@ class Spread:
                 cagr_cfo_per_share*100, cagr_cfo_per_share * 100))
         self.profiler.collect(cagr_cfo_per_share, cfo[-1], 'cfo_per_share', ProfMethod.CAGR)
 
-    def affo(self):
+    def _affo(self):
         cfo = strip(self.cashflow.match_title('Cash from Operations'))
         # Capex for real estates
         capex = strip(self.cashflow.match_title('Acquisition of Real Estate Assets'))
@@ -216,6 +216,19 @@ class Spread:
         ))
         self.profiler.collect(avg_term_period_over_shares, last_term_period_over_shares,
                               Tag.affo_per_share, ProfMethod.IRR)
+
+    def affo(self):
+        cfo = strip(self.cashflow.match_title('Cash from Operations'))
+        # Capex for real estates
+        capex = strip(self.cashflow.match_title('Acquisition of Real Estate Assets'))
+        affo = list_add_list(cfo, capex)
+        affo_per_share = list(map(lambda f: f / self.share_out_filing(), affo))
+        avg_affo_per_share = average(affo_per_share)
+        print("AFFO at average {:.2f}% for: {}".format(
+            avg_affo_per_share*100,
+            list(map(lambda x: round(x, 4), affo_per_share))
+        ))
+        self.profiler.collect(avg_affo_per_share, affo_per_share[-1], Tag.affo_per_share, ProfMethod.AveragePerc)
 
     def nav(self):
         total_asset = strip(self.balance.match_title('Total Assets'))
