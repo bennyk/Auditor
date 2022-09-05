@@ -29,6 +29,7 @@ def colnum_string(n):
     return string
 
 
+# TODO skipped first element in the list
 def striped_average(l: [float]):
     l = strip(l)
     return sum(l) / len(l)
@@ -246,7 +247,7 @@ class Spread:
         net_income = strip(self.income.match_title('Net Income$'))
         requity = strip(self.balance.match_title('Total Common Equity$'))
         roce = list_over_list(net_income, requity, percent=True)
-        avg_roce = striped_average(roce)
+        avg_roce = average(roce)
         print("Return on Common Equity average {:.2f}% for: {}".format(
             avg_roce,
             list(map(lambda x: round(x, 2), roce))
@@ -273,7 +274,7 @@ class Spread:
         _1 = list_add_list(debt, equity)
         _2 = list_add_list(_1, cash)
         roic_per = list_over_list(nopat, _2, percent=True)
-        avg_roic_per = striped_average(roic_per)
+        avg_roic_per = average(roic_per)
         print("Return on Invested Capital average {:.2f}% for: {}".format(
             avg_roic_per,
             list(map(lambda x: round(x, 2), roic_per))
@@ -285,7 +286,7 @@ class Spread:
         ebit = strip(self.income.match_title('Operating Income$'))
         # ebitda = self.match_title('EBITDA$')
         net_debt_over_ebit = list_over_list(net_debt, ebit)
-        avg_net_debt_over_ebit = striped_average(net_debt_over_ebit)
+        avg_net_debt_over_ebit = average(net_debt_over_ebit)
         print("Net debt over EBIT average {:.2f} years for: {}".format(
             avg_net_debt_over_ebit,
             list(map(lambda x: round(x, 2), net_debt_over_ebit))
@@ -297,7 +298,7 @@ class Spread:
         ebits = strip(self.income.match_title('Operating Income$'))
         revs = strip(self.income.match_title('Total Revenues$'))
         ebit_margins = list_over_list(ebits, revs, percent=True)
-        avg_ebit_margins = striped_average(ebit_margins)
+        avg_ebit_margins = average(ebit_margins)
         print("EBIT margin average {:.2f}% for (numbers in percent) {}".format(
             avg_ebit_margins,
             list(map(lambda x: round(x, 2), ebit_margins))
@@ -311,7 +312,7 @@ class Spread:
             print("Warning: ev_over_ebit: Missing values tab.")
             return
         ev_over_ebit = strip2(self.values.match_title('LTM Total Enterprise Value / EBIT$'))
-        avg_ev_over_ebit = striped_average(ev_over_ebit)
+        avg_ev_over_ebit = average(ev_over_ebit)
         print("EV over EBIT average {:.2f} ratio for: {}".format(
             avg_ev_over_ebit,
             list(map(lambda x: round(x, 2), ev_over_ebit))
@@ -338,7 +339,7 @@ class Spread:
         # retention ratio is measured by carry out from the previous annual report,
         # while adding net income to the current annual report
 
-        avg_retention_ratio = striped_average(retention_ratio)
+        avg_retention_ratio = average(retention_ratio)
         print("Retention ratio last {:.2f}, average {:.2f} for: {}".format(
             last_retention_ratio,
             avg_retention_ratio,
@@ -368,7 +369,7 @@ class Spread:
 
         div_payout_ratio = list_over_list(div_paid, net_income)
         # Negating div payout to positive for the math to work easier
-        avg_div_payout_ratio = - striped_average(div_payout_ratio)
+        avg_div_payout_ratio = - average(div_payout_ratio)
         print("Dividend payout ratio at average {:.2f} ratio for: {}".format(
             avg_div_payout_ratio,
             list(map(lambda x: round(x, 2), div_payout_ratio))
