@@ -8,6 +8,7 @@ from collections import OrderedDict, namedtuple
 from enum import Enum
 import re
 import decimal
+import statistics
 
 max_row = max_col = 99
 
@@ -224,7 +225,8 @@ class Spread:
         capex = strip(self.cashflow.match_title('Acquisition of Real Estate Assets'))
         affo = list_add_list(cfo, capex)
         affo_per_share = list(map(lambda f: f / self.share_out_filing(), affo))
-        avg_affo_per_share = average(affo_per_share)
+        # use Median rather than average.
+        avg_affo_per_share = statistics.median(affo_per_share)
         print("AFFO at average {:.2f}% for: {}".format(
             avg_affo_per_share*100,
             list(map(lambda x: round(x, 4), affo_per_share))
@@ -491,7 +493,7 @@ class ProfManager:
     # TODO report about the underlying rate?
     Rate = {Tag.rev_per_share: {'high': .08, 'mid': .04},
             Tag.epu: {'high': .1, 'mid': .0},
-            Tag.affo_per_share: {'high': .3, 'mid': .05},
+            Tag.affo_per_share: {'high': .1, 'mid': .07},
             Tag.nav_per_share: {'high': .08, 'mid': .05},
             # TODO ROCE is undefined
             # Tag.ROCE: {'high': .08, 'mid': .065},
