@@ -405,6 +405,7 @@ class Spread:
         op_income = self.income.match_title('Operating Income')
         net_profit = self.income.match_title('Net Income')
         dpu = self.income.match_title('Dividends per share')
+        price_over_affo = price[-1]/self.profiler.d[Tag.affo_per_share]['val2']
 
         self.profiler.collect_last_price({'last_price': price[-1],
                                           'ev_over_ebit': ev_over_ebit[-1],
@@ -414,7 +415,8 @@ class Spread:
                                           'revenue': rev[-1],
                                           'op_income': op_income[-1],
                                           'net_profit': net_profit[-1],
-                                          'dpu': dpu[-1], })
+                                          'dpu': dpu[-1],
+                                          'price_over_affo': price_over_affo})
 
     def share_out_filing(self) -> float:
         x = self.balance.match_title('Total Shares Out\.')
@@ -561,6 +563,7 @@ class ProfManager:
 
         # Ext to data based on Tag.
         ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'DPU sen',
+                      'Price over AFFO',
                       'EV over EBIT', 'Dividend yield', 'ROIC', 'Net debt over EBIT', 'color']
         for x in range(len(ext_header)):
             cell = sheet.cell(row=j, column=i+x)
@@ -596,13 +599,17 @@ class ProfManager:
                 ColorScaleRule(start_type='percentile', start_value=90, start_color=ProfManager.Green,
                                mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
                                end_type='percentile', end_value=10, end_color=ProfManager.Red),
+            'price_over_affo':
+                ColorScaleRule(start_type='num', start_value=0., start_color=ProfManager.Green,
+                               mid_type='num', mid_value=10., mid_color=ProfManager.Yellow,
+                               end_type='num', end_value=15., end_color=ProfManager.Red),
             # Mid cap is between 200mil to 2bil.
             # https://www.bursamalaysia.com/trade/our_products_services/indices/ftse_bursa_malaysia_indices/overview
             'market_cap':
-            # https://colorhunt.co/palette/f7ecdee9dac19ed2c654bab9
-                ColorScaleRule(start_type='percentile', start_value=90, start_color='F7ECDE',
-                               mid_type='percentile', mid_value=20, mid_color='E9DAC1',
-                               end_type='percentile', end_value=10, end_color='54BAB9'),
+            # https://coolors.co/palette/07beb8-3dccc7-68d8d6-9ceaef-c4fff9
+                ColorScaleRule(start_type='percentile', start_value=90, start_color='c4fff9',
+                               mid_type='percentile', mid_value=20, mid_color='9ceaef',
+                               end_type='percentile', end_value=10, end_color='3dccc7'),
         }
         start_row_index = 1
         end_row_index = len(self.companies) + 1
@@ -626,12 +633,13 @@ class ProfManager:
                 # value2 to increase decimal point
                 {'val': c.last_price['last_price'], 'number': 'value2'},
                 {'val': c.last_price['market_cap'], 'number': 'cap', 'rule': rule['market_cap']},
-                {'val': c.last_price['revenue'], 'number': 'value'},
-                {'val': c.last_price['op_income'], 'number': 'value'},
-                {'val': c.last_price['net_profit'], 'number': 'value'},
-                {'val': c.prof[Tag.epu]['val2'], 'number': 'value'},
+                {'val': c.last_price['revenue'], 'number': 'value', 'rule': rule['market_cap']},
+                {'val': c.last_price['op_income'], 'number': 'value', 'rule': rule['market_cap']},
+                {'val': c.last_price['net_profit'], 'number': 'value', 'rule': rule['market_cap']},
+                {'val': c.prof[Tag.epu]['val2'], 'number': 'value', 'rule': rule['market_cap']},
                 # x100 - KLSE/Bursa DPU use fractional pricing model
-                {'val': c.last_price['dpu']*100, 'number': 'value'},
+                {'val': c.last_price['dpu']*100, 'number': 'value', 'rule': rule['market_cap']},
+                {'val': c.last_price['price_over_affo'], 'number': 'value', 'rule': rule['price_over_affo']},
                 {'val': c.prof[Tag.ev_over_ebit]['val2'], 'number': 'ratio',
                  'rule': rule[Tag.ev_over_ebit]},
                 {'val': c.prof[Tag.dividend_yield]['val2'], 'rule': gen_rule},
