@@ -795,12 +795,14 @@ class ProfManager:
                     # TODO apply() function?
                     for a in buckets:
                         assert a.score is None
-                        a.score = 1.
+                        # Scale it to one per metric, 10 for full points
+                        a.score = 10./len(self.metric)
                 elif key is RateType.moderate_avg:
                     print("These companies are: {}".format(comp_at_perc))
                     for a in buckets:
                         assert a.score is None
-                        a.score = .5
+                        # Scale it to half point per metric, 10 for full points
+                        a.score = 5./len(self.metric)
                 else:
                     for a in buckets:
                         assert a.score is None
