@@ -37,7 +37,7 @@ def striped_average(l: [float]):
 
 
 def average(l: [float]):
-    return sum(l) / len(l)
+    return sum(filter(None, l)) / len(l)
 
 
 def strip(l, trim_last=False):
@@ -77,6 +77,16 @@ def list_minus_list(x, y):
 
 
 def cagr(l: [float]) -> float:
+    if l[len(l)-1] < 0:
+        p = abs(l[len(l) - 1])
+        print("Warning: experimenting with patched number in CAGR")
+        return (p / (p+l[0])) ** (1 / len(l)) - 1
+
+    if l[0] < 0:
+        p = abs(l[0])
+        print("Warning: experimenting with patched number in CAGR")
+        return (p + l[len(l)-1] / p) ** (1 / len(l)) - 1
+
     return (l[len(l) - 1] / l[0]) ** (1 / len(l)) - 1
 
 
@@ -96,7 +106,11 @@ class Table:
                     break
                 last_limit = j+1
         except TypeError:
-            Table.col_limit = last_limit+1
+            c0 = "{}{}".format(colnum_string(last_limit), 1)
+            if sheet_ranges[c0].value is None:
+                Table.col_limit = last_limit
+            else:
+                Table.col_limit = last_limit+1
 
         self.tab = []
         for i in range(1, max_row):
@@ -192,7 +206,7 @@ class Spread:
     def _affo(self):
         cfo = strip(self.cashflow.match_title('Cash from Operations'))
         # Capex for real estates
-        capex = strip(self.cashflow.match_title('Acquisition of Real Estate Assets'))
+        capex = strip(self.cashflow.match_title('Capital Expenditure'))
         affo = list_add_list(cfo, capex)
 
         # TODO made comparison in relation to IGBREIT's share out filing
@@ -222,7 +236,7 @@ class Spread:
     def affo(self):
         cfo = strip(self.cashflow.match_title('Cash from Operations'))
         # Capex for real estates
-        capex = strip(self.cashflow.match_title('Acquisition of Real Estate Assets'))
+        capex = strip(self.cashflow.match_title('Capital Expenditure'))
         affo = list_add_list(cfo, capex)
         affo_per_share = list(map(lambda f: f / self.share_out_filing(), affo))
         # use Median rather than average.
@@ -317,7 +331,7 @@ class Spread:
         avg_ev_over_ebit = average(ev_over_ebit)
         print("EV over EBIT average {:.2f} ratio for: {}".format(
             avg_ev_over_ebit,
-            list(map(lambda x: round(x, 2), ev_over_ebit))
+            list(map(lambda x: .0 if x is None else round(x, 2), ev_over_ebit))
         ))
         self.profiler.collect(avg_ev_over_ebit, ev_over_ebit[-1],
                               Tag.ev_over_ebit, ProfMethod.ReverseRatio)
@@ -384,6 +398,7 @@ class Spread:
             # TODO exception to EV over EBIT
             print("Warning: dividend yield: Missing values tab.")
             return
+        self.values.match_title('LTM Dividend Yield$')
         div_yields = list(map(
             lambda z: 0 if z is None else z, strip2(self.values.match_title('LTM Dividend Yield$')))
         )
@@ -404,18 +419,22 @@ class Spread:
         rev = self.income.match_title('Total Revenues')
         op_income = self.income.match_title('Operating Income')
         net_profit = self.income.match_title('Net Income')
-        dpu = self.income.match_title('Dividends per share')
+
+        dpu = self.income.match_title('Dividends Per Share')
+        last_dpu = 0 if dpu[-1] is None else dpu[-1]
+
         price_over_affo = price[-1]/self.profiler.d[Tag.affo_per_share]['val2']
 
+        last_div_yield = 0 if div_yield[-1] is None else div_yield[-1]
         self.profiler.collect_last_price({'last_price': price[-1],
                                           'ev_over_ebit': ev_over_ebit[-1],
-                                          'last_div_yield': div_yield[-1],
+                                          'last_div_yield': last_div_yield,
                                           'div_yields': div_yield,
                                           'market_cap': market_cap[-1],
                                           'revenue': rev[-1],
                                           'op_income': op_income[-1],
                                           'net_profit': net_profit[-1],
-                                          'dpu': dpu[-1],
+                                          'dpu': last_dpu,
                                           'price_over_affo': price_over_affo})
 
     def share_out_filing(self) -> float:
@@ -855,18 +874,17 @@ class ProfManager:
 
 
 def main():
-    path = "C:/Users/benny/iCloudDrive/Documents/malaysia reits"
+    path = "C:/Users/benny/iCloudDrive/Documents/Bursa Malaysia Energy Infrastructure, Equipment & Services Companies"
     prof = ProfManager()
 
-    tickers = ['axreit', 'igbreit', 'sunreit', 'pavreit', 'alaqar',
-               'uoareit', 'hektar',
-               'klcc', 'amfirst', 'ytlreit', 'arreit', 'clmt',
-               'twrreit', 'kipreit',
-               'sentral', 'atrium', 'alsreit']
+    tickers = ['deleum',
+               'dialog', 'yinson', 'armada', 'dayang', 'coastal',
+               'velesto', 'saprng', 'mhb', 'waseong',
+               #'icon'
+               't7global', 'penergy', 'perdana', 'uzma', 'carimin']
 
     # TODO Adding TODO may need to fix AHP.
-    # tickers = [ 'ahp']
-    # tickers = ['igbreit', 'axreit', 'klcc', 'kipreit', 'ytlreit', 'ahp', 'atrium']
+    # tickers = ['carimin']
     for c in tickers:
         print('Ticker {}'.format(c))
         wb = load_workbook(path+'/' + c + '.xlsx')
