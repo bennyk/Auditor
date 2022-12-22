@@ -9,6 +9,7 @@ from enum import Enum
 import re
 import decimal
 import statistics
+import datetime
 
 max_row = max_col = 99
 
@@ -100,8 +101,14 @@ class Table:
             # configure spreadsheet based on number of cols.
             for j in range(2, max_col):
                 c0 = "{}{}".format(colnum_string(j), 1)
-                self.date_range.append(sheet_ranges[c0].value)
-                if re.match(r'LTM$', sheet_ranges[c0].value):
+                if type(sheet_ranges[c0].value) is datetime.datetime:
+                    # type: datetime.datetime
+                    _ = sheet_ranges[c0].value
+                    self.date_range.append('{}/{}/{}'.format(_.month, _.day, _.year))
+                else:
+                    self.date_range.append(sheet_ranges[c0].value)
+
+                if re.match(r'LTM$', self.date_range[-1]):
                     Table.col_limit = j + 1
                     break
                 last_limit = j+1
@@ -161,7 +168,10 @@ class Spread:
                 # passing Ratios
                 pass
 
-        self.end_year = int(self.end_date.split('/')[-1])
+        if type(self.end_date) is datetime.datetime:
+            self.end_year = self.end_date.year
+        else:
+            self.end_year = int(self.end_date.split('/')[-1])
         self.start_year = int(self.start_date.split('/')[-1])
         print("Sampled from {} to {} in {} years".format(
             self.start_date, self.end_date,
@@ -398,12 +408,15 @@ class Spread:
             # TODO exception to EV over EBIT
             print("Warning: dividend yield: Missing values tab.")
             return
-        self.values.match_title('LTM Dividend Yield$')
-        div_yields = list(map(
-            lambda z: 0 if z is None else z, strip2(self.values.match_title('LTM Dividend Yield$')))
-        )
-        avg_div_yield = average(div_yields)
-        self.profiler.collect(avg_div_yield, div_yields[-1], Tag.dividend_yield, ProfMethod.Average)
+        result = self.values.match_title('LTM Dividend Yield$', none_is_optional=True)
+        if result is not None:
+            div_yields = list(map(
+                lambda z: 0 if z is None else z, strip2(self.values.match_title('LTM Dividend Yield$')))
+            )
+            avg_div_yield = average(div_yields)
+            self.profiler.collect(avg_div_yield, div_yields[-1], Tag.dividend_yield, ProfMethod.Average)
+        else:
+            self.profiler.collect(0, 0, Tag.dividend_yield, ProfMethod.Average)
 
     def last_price(self):
         if self.values is None:
@@ -413,19 +426,22 @@ class Spread:
         price = self.values.match_title('Price$')
         ev_over_ebit = strip2(self.values.match_title('LTM Total Enterprise Value / EBIT$'))
         # TODO all div yields data?
-        div_yield = strip2(self.values.match_title('LTM Dividend Yield$'))
+        div_yield = None
+        _ = self.values.match_title('LTM Dividend Yield$', none_is_optional=True)
+        if _ is not None:
+            div_yield = strip2(self.values.match_title('LTM Dividend Yield$'))
 
         market_cap = self.values.match_title('Market Cap')
         rev = self.income.match_title('Total Revenues')
         op_income = self.income.match_title('Operating Income')
         net_profit = self.income.match_title('Net Income')
 
-        dpu = self.income.match_title('Dividends Per Share')
-        last_dpu = 0 if dpu[-1] is None else dpu[-1]
+        dpu = self.income.match_title('Dividends Per Share', none_is_optional=True)
+        last_dpu = 0 if dpu is None or dpu[-1] is None else dpu[-1]
 
         price_over_affo = price[-1]/self.profiler.d[Tag.affo_per_share]['val2']
 
-        last_div_yield = 0 if div_yield[-1] is None else div_yield[-1]
+        last_div_yield = 0 if div_yield is None or div_yield[-1] is None else div_yield[-1]
         self.profiler.collect_last_price({'last_price': price[-1],
                                           'ev_over_ebit': ev_over_ebit[-1],
                                           'last_div_yield': last_div_yield,
@@ -652,9 +668,9 @@ class ProfManager:
                 # value2 to increase decimal point
                 {'val': c.last_price['last_price'], 'number': 'value2'},
                 {'val': c.last_price['market_cap'], 'number': 'cap', 'rule': rule['market_cap']},
-                {'val': c.last_price['revenue'], 'number': 'value', 'rule': rule['market_cap']},
-                {'val': c.last_price['op_income'], 'number': 'value', 'rule': rule['market_cap']},
-                {'val': c.last_price['net_profit'], 'number': 'value', 'rule': rule['market_cap']},
+                {'val': c.last_price['revenue'], 'number': 'cap', 'rule': rule['market_cap']},
+                {'val': c.last_price['op_income'], 'number': 'cap', 'rule': rule['market_cap']},
+                {'val': c.last_price['net_profit'], 'number': 'cap', 'rule': rule['market_cap']},
                 {'val': c.prof[Tag.epu]['val2'], 'number': 'value', 'rule': rule['market_cap']},
                 # x100 - KLSE/Bursa DPU use fractional pricing model
                 {'val': c.last_price['dpu']*100, 'number': 'value', 'rule': rule['market_cap']},
@@ -860,13 +876,16 @@ class ProfManager:
                                           diff=diff*100, record=record, current=current))
 
                             # TODO refactored the block below
-                            div_yields = list(map(lambda z: 0 if z is None else z, company.last_price['div_yields']))
-                            avg_div_yield = average(div_yields)
-                            dy_incr = 100 * (company.last_price['last_div_yield'] - avg_div_yield) / avg_div_yield
-                            trend = 'upside +' if dy_incr > 0 else 'downside '
-                            print("- Last div yield was {:.2f} %, we see last {}{:.2f} pts"
-                                  " based on average div yield of {:.2f} % ".format(
-                                    company.last_price['last_div_yield']*100, trend, dy_incr, avg_div_yield*100, ))
+                            if company.last_price['div_yields'] is not None:
+                                div_yields = list(map(lambda z: 0 if z is None else z, company.last_price['div_yields']))
+                                avg_div_yield = average(div_yields)
+                                dy_incr = 100 * (company.last_price['last_div_yield'] - avg_div_yield) / avg_div_yield
+                                trend = 'upside +' if dy_incr > 0 else 'downside '
+                                print("- Last div yield was {:.2f} %, we see last {}{:.2f} pts"
+                                      " based on average div yield of {:.2f} % ".format(
+                                        company.last_price['last_div_yield']*100, trend, dy_incr, avg_div_yield*100, ))
+                            else:
+                                print("No dividend was reported.")
 
         _([RateType.above_avg, RateType.moderate_avg])
         print("\nThe following quotes were rated at below average rating though")
@@ -874,17 +893,13 @@ class ProfManager:
 
 
 def main():
-    path = "C:/Users/benny/iCloudDrive/Documents/Bursa Malaysia Energy Infrastructure, Equipment & Services Companies"
+    path = "C:/Users/benny/iCloudDrive/Documents/company-spreads"
     prof = ProfManager()
 
-    tickers = ['deleum',
-               'dialog', 'yinson', 'armada', 'dayang', 'coastal',
-               'velesto', 'saprng', 'mhb', 'waseong',
-               #'icon'
-               't7global', 'penergy', 'perdana', 'uzma', 'carimin']
+    tickers = ['intc', 'tsm', 'nvda', 'amd', 'txn', 'qcom', 'mu', ]
+    # tickers = ['mu', ]
 
     # TODO Adding TODO may need to fix AHP.
-    # tickers = ['carimin']
     for c in tickers:
         print('Ticker {}'.format(c))
         wb = load_workbook(path+'/' + c + '.xlsx')
