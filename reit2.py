@@ -200,6 +200,16 @@ class Spread:
             cagr_epu*100, epu))
         self.profiler.collect(cagr_epu, epu[-1]*100, Tag.epu, ProfMethod.CAGR)
 
+    def owner_yield(self):
+        earning = strip(self.cashflow.match_title('Free Cash Flow$'))
+        shares_outstanding = strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
+        earning_yield = list_over_list(earning, shares_outstanding)
+        avg_yield = average(earning_yield)
+        print("Earning yield from {:.2f} to {:.2f} at average {:.2f}% for: {}".format(
+            earning_yield[0], earning_yield[-1],
+            avg_yield, earning_yield))
+        self.profiler.collect(avg_yield, earning_yield[-1], Tag.owner_yield, ProfMethod.Average)
+
     def cfo(self):
         # aka FFO - Funds from Operations
         cfo = strip(self.cashflow.match_title('Cash from Operations'))
@@ -482,6 +492,7 @@ ProfVerbose = {ProfMethod.CAGR: 'CAGR',
 class Tag(Enum):
     rev_per_share = 1
     epu = 2
+    owner_yield = 13
     affo_per_share = 3
     nav_per_share = 4
     # TODO ROCE is optional for tabulation.
@@ -530,6 +541,7 @@ class ProfManager:
     # TODO report about the underlying rate?
     Rate = {Tag.rev_per_share: {'high': .08, 'mid': .04},
             Tag.epu: {'high': .1, 'mid': .0},
+            Tag.owner_yield: {'high': .1, 'mid': .05},
             Tag.affo_per_share: {'high': .1, 'mid': .07},
             Tag.nav_per_share: {'high': .08, 'mid': .05},
             # TODO ROCE is undefined
@@ -597,9 +609,9 @@ class ProfManager:
             i += 1
 
         # Ext to data based on Tag.
-        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'DPU sen',
-                      'Price over AFFO',
-                      'EV over EBIT', 'Dividend yield', 'ROIC', 'Net debt over EBIT', 'color']
+        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'Owner yield ratio',
+                      'DPU sen', 'Price over AFFO', 'EV over EBIT',
+                      'Dividend yield', 'ROIC', 'Net debt over EBIT', 'color']
         for x in range(len(ext_header)):
             cell = sheet.cell(row=j, column=i+x)
             cell.value = ext_header[x]
@@ -655,6 +667,7 @@ class ProfManager:
             lead = [
                 {'val': c.prof[Tag.rev_per_share]['val1'], 'rule': gen_rule},
                 {'val': c.prof[Tag.epu]['val1'], 'rule': gen_rule},
+                {'val': c.prof[Tag.owner_yield]['val1'], 'number': 'ratio', 'rule': gen_rule},
                 {'val': c.prof[Tag.affo_per_share]['val1'], 'rule': gen_rule},
                 {'val': c.prof[Tag.nav_per_share]['val1'], 'rule': gen_rule},
                 {'val': c.prof[Tag.ROIC]['val1'], 'rule': gen_rule},
@@ -672,6 +685,7 @@ class ProfManager:
                 {'val': c.last_price['op_income'], 'number': 'cap', 'rule': rule['market_cap']},
                 {'val': c.last_price['net_profit'], 'number': 'cap', 'rule': rule['market_cap']},
                 {'val': c.prof[Tag.epu]['val2'], 'number': 'value', 'rule': rule['market_cap']},
+                {'val': c.prof[Tag.owner_yield]['val2'], 'number': 'value', 'rule': rule['market_cap']},
                 # x100 - KLSE/Bursa DPU use fractional pricing model
                 {'val': c.last_price['dpu']*100, 'number': 'value', 'rule': rule['market_cap']},
                 {'val': c.last_price['price_over_affo'], 'number': 'value', 'rule': rule['price_over_affo']},
@@ -907,6 +921,7 @@ def main():
         t = Spread(wb, c, pf)
         t.revenue()
         t.epu()
+        t.owner_yield()
         # t.cfo()
         t.affo()
         t.nav()
