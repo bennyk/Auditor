@@ -358,27 +358,15 @@ class Spread:
 
     # TODO retined earnings pay in advance for one year?
     def retained_earnings_ratio(self):
-        _ = strip(self.balance.match_title('Retained Earnings$'), trim_last=True)
-        # skip the latest annual for retained earnings only
-        retained_earnings = _[:-1]
-        # TODO some Company such as IGBREIT does not provide Retained Earnings forecast
-        # print("XXX retained earnings", len(retained_earnings), retained_earnings)
-        _ = strip(self.income.match_title('Net Income$'), trim_last=True)
-        # skip the first year annual for net income only
-        net_income = _[1:]
-        # print("XXX net income", len(net_income), net_income)
+        retained_earnings = strip(self.balance.match_title('Retained Earnings$'))
+        net_income = strip(self.income.match_title('Net Income$'))
         retention_ratio = list_over_list(retained_earnings, net_income)
-        # div_paid = strip(self.cashflow.match_title('Common Dividends Paid'))
-        # retention_ratio = list_add_list(net_income, div_paid)
-
         last_retention_ratio = retention_ratio[-1]
-        # retention ratio is measured by carry out from the previous annual report,
-        # while adding net income to the current annual report
 
         avg_retention_ratio = average(retention_ratio)
-        print("Retention ratio last {:.2f}, average {:.2f} for: {}".format(
-            last_retention_ratio,
+        print("Retention ratio average {:.2f}, last {:.2f} for: {}".format(
             avg_retention_ratio,
+            last_retention_ratio,
             list(map(lambda x: round(x, 2), retention_ratio))
         ))
         self.profiler.collect(avg_retention_ratio, last_retention_ratio,
@@ -610,7 +598,7 @@ class ProfManager:
 
         # Ext to data based on Tag.
         ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'Owner yield ratio',
-                      'DPU sen', 'Price over AFFO', 'EV over EBIT',
+                      'Retained earnings ratio', 'DPU sen', 'Price over AFFO', 'EV over EBIT',
                       'Dividend yield', 'ROIC', 'Net debt over EBIT', 'color']
         for x in range(len(ext_header)):
             cell = sheet.cell(row=j, column=i+x)
@@ -686,6 +674,7 @@ class ProfManager:
                 {'val': c.last_price['net_profit'], 'number': 'cap', 'rule': rule['market_cap']},
                 {'val': c.prof[Tag.epu]['val2'], 'number': 'value', 'rule': rule['market_cap']},
                 {'val': c.prof[Tag.owner_yield]['val2'], 'number': 'value', 'rule': rule['market_cap']},
+                {'val': c.prof[Tag.retained_earnings_ratio]['val2'], 'number': 'value', 'rule': rule['market_cap']},
                 # x100 - KLSE/Bursa DPU use fractional pricing model
                 {'val': c.last_price['dpu']*100, 'number': 'value', 'rule': rule['market_cap']},
                 {'val': c.last_price['price_over_affo'], 'number': 'value', 'rule': rule['price_over_affo']},
