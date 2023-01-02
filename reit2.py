@@ -279,6 +279,20 @@ class Spread:
         ))
         self.profiler.collect(avg_nav_per_share, nav_per_share[-1], Tag.nav_per_share, ProfMethod.CAGR)
 
+    def tangible_book(self):
+        total_equity = strip(self.balance.match_title('Total Equity'))
+        goodwill = strip(self.balance.match_title('Goodwill'))
+        intangible = strip(self.balance.match_title('Other Intangibles'))
+        tangible = list_minus_list(total_equity, goodwill)
+        tangible = list_minus_list(tangible, intangible)
+        tangible_per_share = list(map(lambda f: f / self.share_out_filing(), tangible))
+        avg_tangible_per_share = cagr(tangible_per_share)
+        print("Tangible book per share at CAGR {:.2f}% for: {}".format(
+            avg_tangible_per_share*100,
+            list(map(lambda x: round(x, 4), tangible_per_share)),
+        ))
+        self.profiler.collect(avg_tangible_per_share, tangible_per_share[-1], Tag.tangible_per_share, ProfMethod.CAGR)
+
     def return_equity(self):
         net_income = strip(self.income.match_title('Net Income$'))
         requity = strip(self.balance.match_title('Total Common Equity$'))
@@ -482,7 +496,8 @@ class Tag(Enum):
     epu = 2
     owner_yield = 13
     affo_per_share = 3
-    nav_per_share = 4
+    # nav_per_share = 4
+    tangible_per_share = 14
     # TODO ROCE is optional for tabulation.
     # ROCE = 5
     ROIC = 6
@@ -531,7 +546,8 @@ class ProfManager:
             Tag.epu: {'high': .1, 'mid': .0},
             Tag.owner_yield: {'high': .1, 'mid': .05},
             Tag.affo_per_share: {'high': .1, 'mid': .07},
-            Tag.nav_per_share: {'high': .08, 'mid': .05},
+            # Tag.nav_per_share: {'high': .08, 'mid': .05},
+            Tag.tangible_per_share: {'high': .08, 'mid': .05},
             # TODO ROCE is undefined
             # Tag.ROCE: {'high': .08, 'mid': .065},
             Tag.ROIC: {'high': .06, 'mid': .05},
@@ -657,7 +673,7 @@ class ProfManager:
                 {'val': c.prof[Tag.epu]['val1'], 'rule': gen_rule},
                 {'val': c.prof[Tag.owner_yield]['val1'], 'number': 'ratio', 'rule': gen_rule},
                 {'val': c.prof[Tag.affo_per_share]['val1'], 'rule': gen_rule},
-                {'val': c.prof[Tag.nav_per_share]['val1'], 'rule': gen_rule},
+                {'val': c.prof[Tag.tangible_per_share]['val1'], 'rule': gen_rule},
                 {'val': c.prof[Tag.ROIC]['val1'], 'rule': gen_rule},
                 {'val': c.prof[Tag.net_debt_over_ebit]['val1'], 'number': 'ratio',
                  'rule': rule[Tag.net_debt_over_ebit]},
@@ -899,7 +915,7 @@ def main():
     path = "C:/Users/benny/iCloudDrive/Documents/company-spreads"
     prof = ProfManager()
 
-    tickers = ['intc', 'tsm', 'nvda', 'amd', 'txn', 'qcom', 'mu', ]
+    tickers = ['intc', 'tsm', 'nvda', 'amd', 'txn', 'qcom', 'mu', 'csco', 'ghlsys', ]
     # tickers = ['mu', ]
 
     # TODO Adding TODO may need to fix AHP.
@@ -913,7 +929,8 @@ def main():
         t.owner_yield()
         # t.cfo()
         t.affo()
-        t.nav()
+        # t.nav()
+        t.tangible_book()
         # t.return_equity()
         t.return_invested_cap()
         t.net_debt_over_ebit()
