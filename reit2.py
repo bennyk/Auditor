@@ -172,7 +172,11 @@ class Spread:
             self.end_year = self.end_date.year
         else:
             self.end_year = int(self.end_date.split('/')[-1])
-        self.start_year = int(self.start_date.split('/')[-1])
+
+        if type(self.start_date) is datetime.datetime:
+            self.start_year = self.start_date.year
+        else:
+            self.start_year = int(self.start_date.split('/')[-1])
         print("Sampled from {} to {} in {} years".format(
             self.start_date, self.end_date,
             1+self.end_year-self.start_year))
@@ -281,9 +285,13 @@ class Spread:
 
     def tangible_book(self):
         total_equity = strip(self.balance.match_title('Total Equity'))
-        goodwill = strip(self.balance.match_title('Goodwill'))
+        goodwill_not_strip = self.balance.match_title('Goodwill', none_is_optional=True)
+        tangible = total_equity
+        if goodwill_not_strip is not None:
+            goodwill = strip(goodwill_not_strip)
+            tangible = list_minus_list(total_equity, goodwill)
+
         intangible = strip(self.balance.match_title('Other Intangibles'))
-        tangible = list_minus_list(total_equity, goodwill)
         tangible = list_minus_list(tangible, intangible)
         tangible_per_share = list(map(lambda f: f / self.share_out_filing(), tangible))
         avg_tangible_per_share = cagr(tangible_per_share)
@@ -915,8 +923,9 @@ def main():
     path = "C:/Users/benny/iCloudDrive/Documents/company-spreads"
     prof = ProfManager()
 
-    tickers = ['intc', 'tsm', 'nvda', 'amd', 'txn', 'qcom', 'mu', 'csco', 'ghlsys', ]
-    # tickers = ['mu', ]
+    tickers = ['intc', 'tsm', 'nvda', 'amd', 'txn', 'qcom', 'mu', 'csco', 'ghlsys',
+               'meta', 'kr', 'revenue', 'mdt', 'tsla', 'aapl', 'brk-b', 'digi', ]
+    # tickers = ['digi', ]
 
     # TODO Adding TODO may need to fix AHP.
     for c in tickers:
