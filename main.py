@@ -3,40 +3,25 @@
 # Press Shift+F10 to execute it or replace it with your code.
 # Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 
+import os.path
+
 from openpyxl import load_workbook
 from reit2 import ProfManager, Spread
+from bcolors import bcolors, colour_print
+import tradingview
 
 
 def main():
-    path = "C:/Users/benny/iCloudDrive/Documents/company-spreads"
     prof = ProfManager()
+    tickers = tradingview.TradingView().fetch()
 
-    # tickers = ['intc', 'tsm', 'nvda', 'amd', 'txn', 'qcom', 'mu', 'csco',
-    #            'meta', 'kr', 'mdt', 'tsla', 'aapl', 'msft', 'adi', 'goog', 'brk-b',
-    #            '3333', '1810',
-    #            'kipreit', 'icap', 'ghlsys', 'digi', 'genting', 'mieco',
-    #            'igbreit', 'kobay', 'dpharma', 'timecom',
-    #            'slb', 'oxy', 'xom',
-    #            #'mob',
-    #            ]
-    # tickers = ['intc', 'nvda', 'brk-b', 'ghlsys', 'digi','revenue',  ]
-    tickers = ['vs', 'sam', 'skpres', 'uchitec', 'pie', 'dufu', 'kobay',
-               'wellcal', 'cbip', 'chinwel', 'boilerm', 'qes',
-               # 'ataims', 'qes'
-
-   # tickers = ['digi', 'maxis', 'axiata', 'tm', 'timecom', 'redtone', 'ock', ]
-               # 'gpacket', 'xox'
-               'inari', 'vitrox', 'mpi', 'd&o', 'unisem', 'frontkn', 'uwc', 'gtronic',
-               'jhm', 'kesm', 'vis', 'keyasic',
-
-               'greatec', 'penta', 'genetec', 'mi',
-               'genting',
-               'mfcb',]
-
-    # tickers = ['mfcb']
-
-    # TODO Adding TODO may need to fix AHP.
+    path = "spreads"
     for c in tickers:
+        xls_path = path+'/' + c + '.xlsx'
+        if not os.path.isfile(xls_path):
+            colour_print("Excel file is missing: '{}'".format(xls_path), bcolors.WARNING)
+            continue
+
         print('Ticker {}'.format(c))
         wb = load_workbook(path+'/' + c + '.xlsx')
         pf = prof.create_folder(c)
