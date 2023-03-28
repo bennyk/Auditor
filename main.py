@@ -6,7 +6,7 @@
 import os.path
 
 from openpyxl import load_workbook
-from reit2 import ProfManager, Spread
+from tikr_terminal import ProfManager, Spread
 from bcolors import bcolors, colour_print
 import tradingview
 
