@@ -78,17 +78,21 @@ class SuppressLineBlock:
     def __init__(self):
         self.out = bootstrap.Out
         self.sup_line_feed = True
+        self.data = []
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.sup_line_feed:
+            print("\n", end='')
             self.out.write('\n')
 
     def write(self, index, msg):
         self.out.write("{}|{}|".format(index, msg))
+        print("{}|{}|".format(index, msg), end='')
         self.sup_line_feed = False
+        self.data.append(msg)
 
 
 class Page:
@@ -97,6 +101,7 @@ class Page:
 
     def __init__(self, page: bs4.element.Tag):
         self.page = page
+        self.data = []
 
     def parse_top(self):
         for x in self.page.contents:
@@ -160,23 +165,31 @@ class Page:
                     x: bs4.element.Tag
 
                     if x.name == 'td':
-                        self.parse_span(x)
+                        spanned = self.parse_span(x)
+                        if len(spanned) == 0:
+                            text = x.text.strip()
+                            text = re.sub(r'\n', ' ', text)
 
-                        text = x.text.strip()
-                        text = re.sub(r'\n', ' ', text)
+                            if re.match(Page.re_numerical, text):
+                                try:
+                                    sup_line_block.write(index, fix_currency(text))
+                                except ValueError:
+                                    sup_line_block.write(index, text)
 
-                        if re.match(Page.re_numerical, text):
-                            try:
-                                sup_line_block.write(index, fix_currency(text))
-                            except ValueError:
+                            elif re.match(Page.re_text, text):
                                 sup_line_block.write(index, text)
 
-                        elif re.match(Page.re_text, text):
-                            sup_line_block.write(index, text)
+                            index += 1
+                        else:
+                            for a in spanned:
+                                sup_line_block.write(index, a)
 
-                        index += 1
+        # print(sup_line_block.data)
+        self.data.append(sup_line_block.data)
+        pass
 
     def parse_span(self, span):
+        result = []
         for x in span.contents:
             if type(x) == bs4.element.NavigableString:
                 continue
@@ -184,10 +197,22 @@ class Page:
             elif type(x) == bs4.element.Tag:
                 x: bs4.element.Tag
                 if x.name == 'span':
-                    pass
+                    result = self.parse_span(x)
 
                 elif x.name == 'div':
                     pass
+
+                elif x.name == 'img':
+                    pass
+
+                else:
+                    # elif x.name == 'a':
+                    #     result.append(x.text)
+                    # elif x.name == 'sup':
+                    #     result.append(x.text)
+                    result.append(x.text)
+
+        return result
 
 
 class StyleParser:

@@ -3,7 +3,12 @@ import requests
 from bs4 import BeautifulSoup
 
 import bootstrap
-from table import Page, SuppressLineBlock
+from table import Page
+
+# Hierarchical tree structure based on bourse, regional geo in a tree such as apac/bursa/.
+# Websites to fetch URL link vary by sector and industry: -
+#     https://investingmalaysia.com/category/
+#     https://www.malaysiastock.biz/Listed-Companies.aspx
 
 
 class TradingView:
@@ -18,8 +23,6 @@ class TradingView:
         page = requests.get(self.path)
         soup = BeautifulSoup(page.text, 'html.parser')
         with open('console.log', "w") as bootstrap.Out:
-            # out = bootstrap.Out
-
             tab = soup.find('table')
             for x in tab:
                 # print(x.text)
