@@ -57,48 +57,75 @@ move = ActionChains(driver)
 move.click_and_hold(elem).move_by_offset(-200, 0).release().perform()
 time.sleep(5)
 
-print("clicking 'Copy Table to Clipboard'")
-# elem = driver.find_element(By.XPATH, "//button[contains(@class, 'v-btn v-btn--icon v-btn--round theme--light v-size--default primaryAction--text')]")
-elem = driver.find_element(By.XPATH, "//button[@class='v-btn v-btn--icon v-btn--round theme--light v-size--default primaryAction--text']")
-ActionChains(driver).click(elem).perform()
-print("copied table", elem.text)
-time.sleep(5)
 
-clipped = pyperclip.paste()
-clipped = clipped.split('\r\n')
-clipped = [item.split('\t') for item in clipped]
-wb = Workbook()
+class Clipboard:
+    def __init__(self):
+        self.wb = Workbook()
 
-# TODO remove the previous active?
-# ws = wb.active
+    def run(self):
+        for t in ["Income Statement", "Balance Sheet", "Cash Flow Statement"]:
+            self.select(t)
+            self.copy_table(t)
+            self.paste(t)
 
-# worksheet.worksheet.Worksheet
-# type: worksheet
-ws = wb.create_sheet("Income")
-# created sheet may intro the title automatically
-# ws.title = "Income Statement"
+    def select(self, title):
+        txt = "//*[contains(text(), '{title}')]".format(title=title)
+        driver.find_element(By.XPATH, txt).click()
+        # driver.find_element(By.XPATH, "//*[text()='Income Statement']").click()
+        # driver.find_element(By.XPATH, "//*[text()='Balance Sheet']").click()
+        # driver.find_element(By.XPATH, "//*[contains(text(), 'Cash Flow Statement')]").click()
 
-for row, row_data in enumerate(clipped, start=1):
-    for col, cell_data in enumerate(row_data, start=1):
-        # print(cell_data)
-        number_flag = False
-        per_flag = False
-        if re.match(Page.re_numerical, cell_data):
-            try:
-                if re.match(Page.re_percent, cell_data):
-                    cell_data = fix_percent(cell_data)
-                    per_flag = True
-                else:
-                    # assuming it is a number until it caught exception
-                    cell_data = fix_currency(cell_data)
-                    number_flag = True
-            except ValueError:
-                pass
-        cell = ws.cell(row=row, column=col, value=cell_data)
-        if number_flag:
-            cell.number_format = '0,00'
-        elif per_flag:
-            cell.number_format = '0.00%'
-wb.save('spam.xlsx')
+    def copy_table(self, title):
+        print("clicking 'Copy Table to Clipboard' on '{title}' table".format(title=title))
+        # elem = driver.find_element(By.XPATH, "//button[contains(@class, 'v-btn v-btn--icon v-btn--round theme--light v-size--default primaryAction--text')]")
+        elem = driver.find_element(By.XPATH, "//button[@class='v-btn v-btn--icon v-btn--round theme--light v-size--default primaryAction--text']")
+        ActionChains(driver).click(elem).perform()
+        print("copied table", elem.text)
+        time.sleep(3)
+
+    def paste(self, title):
+        clipped = pyperclip.paste()
+        clipped = clipped.split('\r\n')
+        clipped = [item.split('\t') for item in clipped]
+
+        # TODO remove the previous active?
+        # ws = wb.active
+
+        # worksheet.worksheet.Worksheet
+        # type: worksheet
+        first_word = title.split()[0]
+        ws = self.wb.create_sheet(first_word)
+        # created sheet may intro the title automatically
+        # ws.title = "Income Statement"
+
+        for row, row_data in enumerate(clipped, start=1):
+            for col, cell_data in enumerate(row_data, start=1):
+                # print(cell_data)
+                number_flag = False
+                per_flag = False
+                if re.match(Page.re_numerical, cell_data):
+                    try:
+                        if re.match(Page.re_percent, cell_data):
+                            cell_data = fix_percent(cell_data)
+                            per_flag = True
+                        else:
+                            # assuming it is a number until it caught exception
+                            cell_data = fix_currency(cell_data)
+                            number_flag = True
+                    except ValueError:
+                        pass
+                cell = ws.cell(row=row, column=col, value=cell_data)
+                if number_flag:
+                    cell.number_format = '0,00'
+                elif per_flag:
+                    cell.number_format = '0.00%'
+
+    def save(self):
+        self.wb.save('spam.xlsx')
+
+
+clip = Clipboard()
+clip.run()
+clip.save()
 
 time.sleep(3600)
