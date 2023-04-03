@@ -1,5 +1,3 @@
-import time
-
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
@@ -9,6 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from openpyxl import Workbook, worksheet
 import pyperclip
 import re
+import time
 
 from table import Page, fix_currency, fix_percent
 
@@ -43,28 +42,55 @@ print("got it")
 # TODO search the text manually on Search entry manually
 time.sleep(5)
 
-print("waiting to click on Financials button")
-time.sleep(5)
 
-driver.find_element(By.PARTIAL_LINK_TEXT, "Financials").click()
-# WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.PARTIAL_LINK_TEXT, "Financials")))
-time.sleep(5)
+class MainTable:
+    def __init__(self):
+        pass
 
-print("sliding year range to max years available")
-elem = driver.find_element(By.CLASS_NAME, "v-slider__thumb")
-move = ActionChains(driver)
-# TODO -200 assuming maximized window
-move.click_and_hold(elem).move_by_offset(-200, 0).release().perform()
-time.sleep(5)
+    def open(self, title, offset):
+        print("waiting to click on {title} button".format(title=title))
+        time.sleep(5)
+
+        driver.find_element(By.PARTIAL_LINK_TEXT, "{title}".format(title=title)).click()
+        # driver.find_element(By.PARTIAL_LINK_TEXT, "Valuation").click()
+        # driver.find_element(By.PARTIAL_LINK_TEXT, "Financials").click()
+        # WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.PARTIAL_LINK_TEXT, "Financials")))
+        time.sleep(8)
+
+        print("sliding year range to max years available")
+        elem = driver.find_element(By.CLASS_NAME, "v-slider__thumb")
+        print("found slider thumb")
+        move = ActionChains(driver)
+        # TODO -200 assuming maximized window
+        move.click_and_hold(elem).move_by_offset(offset, 0).release().perform()
+        time.sleep(5)
+
+    def run(self):
+        clip = Clipboard()
+        self.open('Financials', offset=-200)
+        clip.run(selection=["Income Statement", "Balance Sheet", "Cash Flow Statement"])
+
+        # additional offset to slide longer range span
+        # TODO Values
+        self.open('Valuation', offset=-880)
+        clip.run(selection="Values")
+
+        clip.save()
+        print("Saved.")
 
 
 class Clipboard:
     def __init__(self):
         self.wb = Workbook()
 
-    def run(self):
-        for t in ["Income Statement", "Balance Sheet", "Cash Flow Statement"]:
-            self.select(t)
+    def run(self, selection=None):
+        if type(selection) is list:
+            for t in selection:
+                self.select(t)
+                self.copy_table(t)
+                self.paste(t)
+        elif type(selection) is str:
+            t = selection
             self.copy_table(t)
             self.paste(t)
 
@@ -124,8 +150,8 @@ class Clipboard:
         self.wb.save('spam.xlsx')
 
 
-clip = Clipboard()
-clip.run()
-clip.save()
+main = MainTable()
+# run the pending chain of actions
+main.run()
 
 time.sleep(3600)
