@@ -28,6 +28,7 @@ class WaitCapture:
         looper.mainloop()
         # elem = driver.find_element(By.ID, "input-168")
         elem = driver.find_element(By.CLASS_NAME, "v-chip__content")
+        assert elem.text is not None
         print("Found ticker", elem.text)
         self.ticker = elem.text.lower()
 
@@ -36,32 +37,43 @@ class MainTable:
     def __init__(self, ticker):
         self.ticker = ticker
 
-    def open(self, title, offset):
-        print("waiting to click on {title} button".format(title=title))
+    def open(self, title, start_offset, period_offset):
+        print("waiting to load {title}".format(title=title))
         time.sleep(5)
 
         driver.find_element(By.PARTIAL_LINK_TEXT, "{title}".format(title=title)).click()
+        # TODO 5 secs sleep might not work in Valuation spread.
         time.sleep(8)
 
         print("sliding year range to max years available")
-        elem = driver.find_element(By.CLASS_NAME, "v-slider__thumb")
+        driver.find_element(By.CLASS_NAME, "v-slider__thumb")
         print("found slider thumb")
         move = ActionChains(driver)
+
         # https://stackoverflow.com/questions/40485157/how-to-move-range-input-using-selenium-in-python
-        # TODO -200 assuming maximized window
-        # TODO range slider shorter than normal. FB/META ticker was created in 2009
-        # <input value="11" id="input-min-1184" disabled="disabled" readonly="readonly" tabindex="-1">
+        key = "aria-valuemax"
+        elem = driver.find_element(By.CSS_SELECTOR, "div[{}]".format(key))
+        period = int(elem.get_dom_attribute('{}'.format(key)))
+
+        offset = period_offset*start_offset/period
+        print("offset per period", offset, 'and number of period', period)
+        # TODO relative offset position
         move.click_and_hold(elem).move_by_offset(offset, 0).release().perform()
         time.sleep(5)
 
     def run(self):
         clip = Clipboard()
-        self.open('Financials', offset=-200)
+
+        # max case for full span
+        # offset = 15*start_offset/years# self.open('Financials', start_offset=0)
+
+        # Based on initial number of years setting + fudge factor
+        # offset = 5*start_offset/years
+        self.open('Financials', start_offset=-1050, period_offset=5)
         clip.run(selection=["Income Statement", "Balance Sheet", "Cash Flow Statement"])
 
-        # additional offset to slide longer range span
-        # TODO Values
-        self.open('Valuation', offset=-880)
+        # No change to start offset. Period offset based on 10 years in quarterly period
+        self.open('Valuation', start_offset=-1050, period_offset=58)
         clip.run(selection="Values")
 
         clip.save(self.ticker)
@@ -94,7 +106,11 @@ class Clipboard:
 
     def copy_table(self, title):
         print("clicking 'Copy Table to Clipboard' on '{title}' table".format(title=title))
+        # alternative to contains function
         # elem = driver.find_element(By.XPATH, "//button[contains(@class, 'v-btn v-btn--icon v-btn--round theme--light v-size--default primaryAction--text')]")
+
+        # Based on dark theme setting
+        # v-btn v-btn--icon v-btn--round theme--dark v-size--default primaryAction--text
         elem = driver.find_element(By.XPATH, "//button[@class='v-btn v-btn--icon v-btn--round theme--light v-size--default primaryAction--text']")
         ActionChains(driver).click(elem).perform()
         print("copied table", elem.text)
@@ -107,7 +123,7 @@ class Clipboard:
         clipped = clipped.split('\r\n')
         clipped = [item.split('\t') for item in clipped]
 
-        # TODO remove the previous active?
+        # TODO remove the previous active worksheet?
         # ws = wb.active
 
         # worksheet.worksheet.Worksheet
@@ -136,6 +152,8 @@ class Clipboard:
                 cell = ws.cell(row=row, column=col, value=cell_data)
                 # https://stackoverflow.com/questions/12387212/openpyxl-setting-number-format
                 if number_flag:
+                    # TODO formatting error when lacking number of decimal point
+                    #  especially when number formatting error in Valuation spread.
                     cell.number_format = '0,00'
                 elif per_flag:
                     cell.number_format = '0.00%'
