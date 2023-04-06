@@ -228,3 +228,5 @@ if __name__ == '__main__':
 # - UI testing
 #   https://success.outsystems.com/documentation/how_to_guides/devops/how_to_do_ui_testing_with_selenium/#using-selenium-for-testing-the-ui-of-your-apps
 # - Requests: https://www.geeksforgeeks.org/get-post-requests-using-python/?ref=lbp
+
+# TODO spread shorter than 10 years old

@@ -107,7 +107,7 @@ def cagr(l: [float]) -> float:
 class Table:
     col_limit = 0
 
-    def __init__(self, sheet_ranges):
+    def __init__(self, sheet_ranges: worksheet):
         self.date_range = []
         last_limit = 0
         try:
@@ -157,7 +157,7 @@ class Table:
 class Spread:
     Percent_Denominator = 100
 
-    def __init__(self, wb, tick, prof: 'Prof'):
+    def __init__(self, wb: Workbook, tick: str, prof: 'Prof'):
         self.tick = tick
         self.profiler = prof
         self.tabs = []
@@ -864,6 +864,7 @@ class ProfManager:
         j += 1
         for c in self.companies:
             # Table of mainly profile and last_price data
+            # print("Company", c.name)
             lead = [
                 # TODO need to simplified the metrics
                 # Last 10 years metric
@@ -935,7 +936,11 @@ class ProfManager:
             for x in lead:
                 cell = sheet.cell(row=j, column=i)
                 assert 'val' in x
-                cell.value = x['val']
+                if type(x['val']) is complex:
+                    # TODO Not a number
+                    cell.value = 'NaN'
+                else:
+                    cell.value = x['val']
                 if 'number' in x:
                     cell.style = 'Comma'
                     if x['number'] == 'cap':
