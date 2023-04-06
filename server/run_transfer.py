@@ -9,6 +9,7 @@ import pyperclip
 import re
 import time
 from tkinter import *
+import math
 
 from table import Page, fix_currency, fix_percent
 
@@ -94,7 +95,7 @@ class Clipboard:
             # skipping selection dialog
             t = selection
             self.copy_table(t)
-            self.paste(t)
+            self.paste(t, pref_num_format='0.00')
 
     def select(self, title):
         # https://stackoverflow.com/questions/21713280/find-div-element-by-multiple-class-names
@@ -116,7 +117,7 @@ class Clipboard:
         print("copied table", elem.text)
         time.sleep(3)
 
-    def paste(self, title):
+    def paste(self, title, pref_num_format=None):
         # https://stackoverflow.com/questions/62527396/real-time-copying-and-pasting-to-excel
         # https://python-forum.io/thread-26979.html
         clipped = pyperclip.paste()
@@ -134,27 +135,31 @@ class Clipboard:
         # ws.title = "Income Statement"
 
         for row, row_data in enumerate(clipped, start=1):
-            for col, cell_data in enumerate(row_data, start=1):
+            for col, cell_val in enumerate(row_data, start=1):
                 # print(cell_data)
                 number_flag = False
                 per_flag = False
-                if re.match(Page.re_numerical, cell_data):
+                if re.match(Page.re_numerical, cell_val):
                     try:
-                        if re.match(Page.re_percent, cell_data):
-                            cell_data = fix_percent(cell_data)
+                        if re.match(Page.re_percent, cell_val):
+                            cell_val = fix_percent(cell_val)
                             per_flag = True
                         else:
                             # assuming it is a number until it caught exception
-                            cell_data = fix_currency(cell_data)
+                            cell_val = fix_currency(cell_val)
                             number_flag = True
                     except ValueError:
                         pass
-                cell = ws.cell(row=row, column=col, value=cell_data)
+                cell = ws.cell(row=row, column=col, value=cell_val)
                 # https://stackoverflow.com/questions/12387212/openpyxl-setting-number-format
                 if number_flag:
-                    # TODO formatting error when lacking number of decimal point
-                    #  especially when number formatting error in Valuation spread.
-                    cell.number_format = '0,00'
+                    if pref_num_format is not None:
+                        cell.number_format = pref_num_format
+                        if len(str(math.floor(cell_val))) > 3:
+                            # Numerical number larger than 3 digits add prefix
+                            cell.number_format = "0,00" + pref_num_format
+                    else:
+                        cell.number_format = '0,00'
                 elif per_flag:
                     cell.number_format = '0.00%'
 
