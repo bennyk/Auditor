@@ -85,6 +85,10 @@ class Clipboard:
     def __init__(self):
         self.wb = Workbook()
 
+        # removing initial sheet
+        ws = self.wb.active
+        self.wb.remove(ws)
+
     def run(self, selection=None):
         if type(selection) is list:
             for t in selection:
