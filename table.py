@@ -106,7 +106,7 @@ class SuppressLineBlock:
 class Page:
     re_text = re.compile(r"([-–•]?[()/A-Za-z,&'’ ]+(?:[-–]\s*[A-Za-z][()/A-Za-z,&'’ ]+)*)", re.UNICODE)
     re_numerical = re.compile(r'([-–]|(?:\(\s*)?[0-9][0-9]*(?:,[0-9]{1,3})*(?:(\.[0-9]+))?(?:\s*\))?)', re.UNICODE)
-    re_percent = re.compile(r'[\d.]+%', re.UNICODE)
+    re_percent = re.compile(r'([-–]|(?:\(\s*)?[0-9][0-9]*(?:,[0-9]{1,3})*(?:(\.[0-9]+))?(?:\s*\))?%)', re.UNICODE)
 
     def __init__(self, page: bs4.element.Tag):
         self.page = page
