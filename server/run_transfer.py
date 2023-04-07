@@ -90,7 +90,7 @@ class Clipboard:
             for t in selection:
                 self.select(t)
                 self.copy_table(t)
-                self.paste(t)
+                self.paste(t, pref_num_format='0.00')
         elif type(selection) is str:
             # skipping selection dialog
             t = selection
@@ -124,9 +124,6 @@ class Clipboard:
         clipped = clipped.split('\r\n')
         clipped = [item.split('\t') for item in clipped]
 
-        # TODO remove the previous active worksheet?
-        # ws = wb.active
-
         # worksheet.worksheet.Worksheet
         # type: worksheet
         first_word = title.split()[0]
@@ -155,7 +152,7 @@ class Clipboard:
                 if number_flag:
                     if pref_num_format is not None:
                         cell.number_format = pref_num_format
-                        if len(str(math.floor(cell_val))) > 3:
+                        if len(str(abs(math.floor(cell_val)))) > 3:
                             # Numerical number larger than 3 digits add prefix
                             cell.number_format = "0,00" + pref_num_format
                     else:
