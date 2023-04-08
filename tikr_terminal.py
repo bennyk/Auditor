@@ -11,6 +11,7 @@ import decimal
 import statistics
 import datetime
 from functools import partial
+import math
 
 max_row = max_col = 99
 
@@ -944,7 +945,10 @@ class ProfManager:
                 if 'number' in x:
                     cell.style = 'Comma'
                     if x['number'] == 'cap':
-                        cell.number_format = '0,00'
+                        if len(str(abs(math.floor(cell.value)))) > 3:
+                            cell.number_format = "0,000.00"
+                        else:
+                            cell.number_format = '0.00'
                     elif x['number'] == 'value2':
                         cell.number_format = '0.00'
                         # test if we got enough decimal points
