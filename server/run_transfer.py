@@ -4,6 +4,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver import ActionChains
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import MoveTargetOutOfBoundsException
 from openpyxl import Workbook, worksheet
 import pyperclip
 import re
@@ -12,6 +13,7 @@ from tkinter import *
 import math
 
 from table import Page, fix_currency, fix_percent
+from bcolors import colour_print, bcolors
 
 global driver
 
@@ -54,12 +56,27 @@ class MainTable:
         # https://stackoverflow.com/questions/40485157/how-to-move-range-input-using-selenium-in-python
         key = "aria-valuemax"
         elem = driver.find_element(By.CSS_SELECTOR, "div[{}]".format(key))
-        period = int(elem.get_dom_attribute('{}'.format(key)))
+        avail_period = int(elem.get_dom_attribute('{}'.format(key)))
 
-        offset = period_offset*start_offset/period
-        print("offset per period", offset, 'and number of period', period)
-        # TODO relative offset position
-        move.click_and_hold(elem).move_by_offset(offset, 0).release().perform()
+        offset = period_offset*start_offset/avail_period
+
+        print("period_offset {} start_offset {} avail_period {} offset {:.2f}".format(
+            period_offset, start_offset, avail_period, offset))
+        try:
+            move.click_and_hold(elem).move_by_offset(offset, 0).release().perform()
+        except MoveTargetOutOfBoundsException:
+            # TODO relative offset position
+            # fpgroup
+            # period_offset 58 start_offset -1050 avail_period 36 offset -1691.67
+            # period_offset 50 start_offset -1050 avail_period 36 offset -1458.33
+            # gtronic
+            # period_offset 58 start_offset -1050 avail_period 69 offset -882.61
+            colour_print("move target out of bound exception. Trying to retract the offset", bcolors.WARNING)
+            fixed = 50
+            x = fixed*start_offset/avail_period
+            print("period_offset {} start_offset {} avail_period {} offset {:.2f}".format(
+                fixed, start_offset, avail_period, x))
+            move.click_and_hold(elem).move_by_offset(x, 0).release().perform()
         time.sleep(5)
 
     def run(self):
