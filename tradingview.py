@@ -12,11 +12,18 @@ from table import Page
 
 
 class TradingView:
-    def __init__(self, domain=''):
-        URL = "https://www.tradingview.com/markets/stocks-malaysia/sectorandindustry-industry"
-        if domain == '':
-            domain = "electrical-products"
-        self.path = "{}/{}".format(URL, domain)
+    def __init__(self):
+        URL = f"https://www.tradingview.com/markets/stocks-malaysia/sectorandindustry-"
+        # combination of sector with specific domain companies
+        # or simply industry with specific such as electrical-products
+        # sector_industry = 'sector'
+        # domain = 'consumer-services/companies'
+        # or
+        sector_industry = 'industry'
+        domain = 'electrical-products'
+
+        self.path = f"{URL}{sector_industry}/{domain}".format(
+            URL=URL, sectorandindustry=sector_industry, domain=domain)
 
     def fetch(self):
         result = []
