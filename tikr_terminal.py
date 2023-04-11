@@ -92,17 +92,33 @@ def list_one(x, l):
 
 
 def cagr(l: [float]) -> float:
-    if l[len(l)-1] < 0:
-        p = abs(l[len(l) - 1])
-        print("Warning: experimenting with patched number in CAGR")
-        return (p / (p+l[0])) ** (1 / len(l)) - 1
+    # standard CAGR formula:
+    # https://corporatefinanceinstitute.com/resources/valuation/what-is-cagr/
+    # Otherwise we can use piecewise function to workaround complex number
+    # h(x) = -|x|^(1/n) for x < 0
+    # h(x) = |x|^(1/n) for x >= 0
+    # alternate interpretation
+    #   p = (l[len(l)-1] + abs(l[0])) / abs(l[0])
+    #   https://www.exceldemy.com/how-to-calculate-cagr-in-excel-with-negative-number/?utm_source=pocket_saves
 
+    # preceding year
+    y = -1
+    ri = 1/len(l)
     if l[0] < 0:
-        p = abs(l[0])
-        print("Warning: experimenting with patched number in CAGR")
-        return (p + l[len(l)-1] / p) ** (1 / len(l)) - 1
-
-    return (l[len(l) - 1] / l[0]) ** (1 / len(l)) - 1
+        a = l[len(l)-1] / l[0]
+        if l[len(l)-1] >= 0:
+            p = - abs(a) ** ri + y
+        else:
+            p = a ** ri + y
+    else:
+        p = (l[len(l)-1] / l[0]) ** ri + y
+        if type(p) is complex:
+            # if complex try force negation with abs
+            assert l[len(l)-1] < 0
+            a = l[len(l)-1] / l[0]
+            p = - abs(a) ** ri + y
+    assert type(p) is not complex
+    return p
 
 
 class Table:
@@ -236,9 +252,10 @@ class Spread:
             epu_per_share[0], epu_per_share[-1],
             cagr_epu_ratio*Spread.Percent_Denominator, epu_per_share))
 
-        last_cagr_epu_ratio = cagr(epu_per_share[-2:])
         if epu_per_share[-2] == epu_per_share[-1]:
             last_cagr_epu_ratio = cagr(epu_per_share[-3:-1])
+        else:
+            last_cagr_epu_ratio = cagr(epu_per_share[-2:])
 
         self.profiler._collect(cagr_epu_ratio, Tag.epu, ProfMethod.CAGR,
                                val2=cagr(epu_per_share[self.half_len:]),
