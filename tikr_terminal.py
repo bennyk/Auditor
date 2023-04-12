@@ -121,6 +121,10 @@ def cagr(l: [float]) -> float:
     return p
 
 
+def zsum(a):
+    return sum(list(map(lambda x: x if x is not None else 0, a)))
+
+
 class Table:
     col_limit = 0
 
@@ -533,7 +537,7 @@ class Spread:
             i += 4
 
         MC_change = MC[-1]-MC[0]
-        market_over_retained = MC_change / sum(retained_earnings)
+        market_over_retained = MC_change / zsum(retained_earnings)
         print("MC_change over Retained earnings ratio is {:.2f}. MC samples: {}".format(
             market_over_retained,
             list(map(lambda x: round(x, 2), MC))
@@ -541,7 +545,7 @@ class Spread:
 
         val2 = None
         if len(MC) > self.half_len:
-            val2 = (MC[-1]-MC[self.half_len]) / sum(retained_earnings[self.half_len:])
+            val2 = (MC[-1]-MC[self.half_len]) / zsum(retained_earnings[self.half_len:])
 
         self.profiler._collect(market_over_retained, Tag.market_cap_ov_retained_earnings, ProfMethod.ReverseRatio,
                                val2=val2,
