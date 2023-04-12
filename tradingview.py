@@ -13,15 +13,19 @@ from table import Page
 
 class TradingView:
     def __init__(self):
-        URL = f"https://www.tradingview.com/markets/stocks-malaysia/sectorandindustry-"
+        # Configure the region
+        region = 'usa'
+        # region = 'malaysia'
+        URL = f"https://www.tradingview.com/markets/stocks-{region}/sectorandindustry-"
+
         # combination of sector with specific domain companies
         # or simply industry with specific such as electrical-products
         # sector_industry = 'sector'
         # domain = 'consumer-services/companies'
         # or
         sector_industry = 'industry'
-        domain = 'electrical-products'
-
+        # domain = 'electrical-products'
+        domain = 'semiconductors'
         self.path = f"{URL}{sector_industry}/{domain}".format(
             URL=URL, sectorandindustry=sector_industry, domain=domain)
 
