@@ -1151,6 +1151,8 @@ class ProfManager:
                             if company.last_price['div_yields'] is not None:
                                 div_yields = list(map(lambda z: 0 if z is None else z, company.last_price['div_yields']))
                                 avg_div_yield = average(div_yields)
+                                if avg_div_yield == 0.:
+                                    continue
                                 dy_incr = 100 * (company.last_price['last_div_yield'] - avg_div_yield) / avg_div_yield
                                 trend = 'upside +' if dy_incr > 0 else 'downside '
                                 print("- Last div yield was {:.2f} %, we see last {}{:.2f} pts"
