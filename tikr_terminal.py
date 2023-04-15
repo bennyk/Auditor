@@ -427,7 +427,14 @@ class Spread:
 
     def net_debt_over_ebit(self):
         net_debt = self.strip(self.balance.match_title('Net Debt'))
-        ebit = self.strip(self.income.match_title('Operating Income$'))
+
+        # Compute EBIT as Net income - Tax income expense - Interest expense.
+        # Tax expense and Interest expense values from TIKR terminal have been negated.
+        net_income = self.strip(self.income.match_title('Net Income$'))
+        tax_expense = self.strip(self.income.match_title('Income Tax Expense$'))
+        ebit = list_add_list(net_income, tax_expense)
+        interest_expense = self.strip(self.income.match_title('Interest Expense$'))
+        ebit = list_add_list(ebit, interest_expense)
         # ebitda = self.match_title('EBITDA$')
         net_debt_over_ebit = list_over_list(net_debt, ebit)
         avg_net_debt_over_ebit = average(net_debt_over_ebit)
@@ -463,18 +470,18 @@ class Spread:
                                val2=average(net_debt_over_fcf[self.half_len:]),
                                val3=net_debt_over_fcf[-1])
 
-    def ebit_margin(self):
-        ebits = self.strip(self.income.match_title('Operating Income$'))
+    def op_margin(self):
+        op_income = self.strip(self.income.match_title('Operating Income$'))
         revs = self.strip(self.income.match_title('Total Revenues$'))
-        ebit_margins = list_over_list(ebits, revs, percent=True)
-        avg_ebit_margins = average(ebit_margins)
-        print("EBIT margin average {:.2f}% for (numbers in percent) {}".format(
-            avg_ebit_margins,
-            list(map(lambda x: round(x, 2), ebit_margins))
+        op_margins = list_over_list(op_income, revs, percent=True)
+        avg_op_margins = average(op_margins)
+        print("Operating margin average {:.2f}% for (numbers in percent) {}".format(
+        avg_op_margins,
+            list(map(lambda x: round(x, 2), op_margins))
         ))
-        self.profiler._collect(avg_ebit_margins/Spread.Percent_Denominator, Tag.ebit_margin, ProfMethod.AveragePerc,
-                               val2=average(ebit_margins[self.half_len:])/Spread.Percent_Denominator,
-                               val3=ebit_margins[-1]/Spread.Percent_Denominator)
+        self.profiler._collect(avg_op_margins / Spread.Percent_Denominator, Tag.op_margin, ProfMethod.AveragePerc,
+                               val2=average(op_margins[self.half_len:])/Spread.Percent_Denominator,
+                               val3=op_margins[-1]/Spread.Percent_Denominator)
 
     def ev_over_ebit(self):
         if self.values is None:
@@ -687,7 +694,7 @@ class Tag(Enum):
     net_debt_over_ebit = 7
     # net_debt_over_fcf = 15
     ev_over_ebit = 8
-    ebit_margin = 9
+    op_margin = 9
     retained_earnings_ratio = 10
     market_cap_ov_retained_earnings = 14
     # dividend_payout_ratio = 11
@@ -747,7 +754,7 @@ class ProfManager:
             Tag.ROIC: {'high': .5, 'mid': .3},
             Tag.net_debt_over_ebit: {'high': 5., 'mid': 8.},
             # Tag.net_debt_over_fcf: {'high': 5., 'mid': 8.},
-            Tag.ebit_margin: {'high': .3, 'mid': .2},
+            Tag.op_margin: {'high': .3, 'mid': .2},
             Tag.retained_earnings_ratio: {'high': 4., 'mid': 2.},
             # Tag.dividend_payout_ratio: {'high': 1.5, 'mid': 1.},
             Tag.market_cap_ov_retained_earnings: {'high': .5, 'mid': 1.},
@@ -902,7 +909,7 @@ class ProfManager:
                  'rule': rule[Tag.net_debt_over_ebit]},
                 {'val': c.prof[Tag.ev_over_ebit]['val1'], 'number': 'ratio',
                  'rule': rule[Tag.ev_over_ebit]},
-                {'val': c.prof[Tag.ebit_margin]['val1'], 'rule': gen_rule},
+                {'val': c.prof[Tag.op_margin]['val1'], 'rule': gen_rule},
                 {'val': c.prof[Tag.retained_earnings_ratio]['val1'], 'number': 'ratio', 'rule': gen_rule},
                 {'val': c.prof[Tag.market_cap_ov_retained_earnings]['val1'], 'number': 'ratio',
                  'rule': rule[Tag.market_cap_ov_retained_earnings]},
@@ -929,7 +936,7 @@ class ProfManager:
                 {'val': c.prof[Tag.ROIC]['val2'], 'rule': gen_rule},
                 {'val': c.prof[Tag.ev_over_ebit]['val2'], 'number': 'ratio',
                  'rule': rule[Tag.ev_over_ebit]},
-                {'val': c.prof[Tag.ebit_margin]['val2'], 'rule': gen_rule},
+                {'val': c.prof[Tag.op_margin]['val2'], 'rule': gen_rule},
                 {'val': c.prof[Tag.retained_earnings_ratio]['val2'], 'number': 'ratio', 'rule': gen_rule},
                 {'val': c.prof[Tag.market_cap_ov_retained_earnings]['val2'], 'number': 'ratio',
                  'rule': rule[Tag.market_cap_ov_retained_earnings]},
@@ -944,7 +951,7 @@ class ProfManager:
                 {'val': c.prof[Tag.ROIC]['val3'], 'rule': gen_rule},
                 {'val': c.prof[Tag.ev_over_ebit]['val3'], 'number': 'ratio',
                  'rule': rule[Tag.ev_over_ebit]},
-                {'val': c.prof[Tag.ebit_margin]['val3'], 'rule': gen_rule},
+                {'val': c.prof[Tag.op_margin]['val3'], 'rule': gen_rule},
                 {'val': c.prof[Tag.net_debt_over_ebit]['val3'], 'number': 'ratio',
                  'rule': rule[Tag.net_debt_over_ebit]},
                 {'val': c.prof[Tag.dividend_yield]['val3'], 'rule': gen_rule},
