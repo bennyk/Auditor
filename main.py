@@ -41,7 +41,7 @@ def main():
         # t.net_debt_over_fcf()
         t.retained_earnings_ratio()
         t.market_cap_over_retained_earnings_ratio()
-        t.ebit_margin()
+        t.op_margin()
         t.ev_over_ebit()
         # t.dividend_payout_ratio()
         t.div_yield()
