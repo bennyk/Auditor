@@ -12,6 +12,7 @@ import statistics
 import datetime
 from functools import partial
 import math
+from bcolors import bcolors, colour_print
 
 max_row = max_col = 99
 
@@ -432,10 +433,13 @@ class Spread:
         # Tax expense and Interest expense values from TIKR terminal have been negated.
         net_income = self.strip(self.income.match_title('Net Income$'))
         tax_expense = self.strip(self.income.match_title('Income Tax Expense$'))
-        ebit = list_add_list(net_income, tax_expense)
+        ebit = list_minus_list(net_income, tax_expense)
         interest_expense = self.strip(self.income.match_title('Interest Expense$'))
-        ebit = list_add_list(ebit, interest_expense)
-        # ebitda = self.match_title('EBITDA$')
+        ebit = list_minus_list(ebit, interest_expense)
+
+        # EBIT may be more appropriate, as the Depreciation and Amortization captures
+        # a portion of past capital expenditures.
+        # https://corporatefinanceinstitute.com/resources/valuation/ebit-vs-ebitda/
         net_debt_over_ebit = list_over_list(net_debt, ebit)
         avg_net_debt_over_ebit = average(net_debt_over_ebit)
         print("Net debt over EBIT average {:.2f} years for: {}".format(
@@ -445,6 +449,13 @@ class Spread:
         self.profiler._collect(avg_net_debt_over_ebit, Tag.net_debt_over_ebit, ProfMethod.AverageYears,
                                val2=average(net_debt_over_ebit[self.half_len:]),
                                val3=net_debt_over_ebit[-1])
+
+        ebitda = self.strip(self.income.match_title('EBITDA$'))
+        net_debt_over_ebitda = list_over_list(net_debt, ebitda)
+        avg_net_debt_over_ebitda = average(net_debt_over_ebitda)
+        colour_print("EBITDA: Net debt over EBITDA average {:.2f} years for: {}".format(
+            avg_net_debt_over_ebitda,
+            list(map(lambda x: round(x, 2), net_debt_over_ebitda))), bcolors.WARNING)
 
     def net_debt_over_fcf(self):
         # TODO net_debt_over_fcf
