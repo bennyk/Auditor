@@ -3,7 +3,7 @@ from openpyxl.styles import Font
 from openpyxl.worksheet import worksheet
 # from openpyxl.styles.differential import DifferentialStyle
 from openpyxl.formatting.rule import ColorScaleRule, CellIsRule, FormulaRule
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Union
 from collections import OrderedDict, namedtuple
 from enum import Enum
 import re
@@ -565,9 +565,13 @@ class Spread:
         if len(MC) > self.half_len:
             val2 = (MC[-1]-MC[self.half_len]) / zsum(retained_earnings[self.half_len:])
 
+        val3 = None
+        if len(MC) > 0:
+            val3 = (MC[-1]-MC[-2]) / zsum(retained_earnings[-2:])
+
         self.profiler._collect(market_over_retained, Tag.market_cap_ov_retained_earnings, ProfMethod.ReverseRatio,
                                val2=val2,
-                               val3=None)
+                               val3=val3)
 
     def dividend_payout_ratio(self):
         div_paid = self.strip(self.cashflow.match_title('Common Dividends Paid'))
@@ -811,213 +815,10 @@ class ProfManager:
     # Yellow = 'F8DF81'
     # Green = '9BDB07'
 
-    def output(self, benched):
-        ft = Font(name='Calibri', size=11)
-
-        wb = Workbook()
-        sheet = wb.active   # type: worksheet.Worksheet
-        sheet.title = 'sheet 1'
-
-        row_margin = 1
-        cell = sheet.cell(row=1, column=2)
-        cell.value = '10 years'
-
-        j = row_margin+1
-        i = 2
-        for x in Tag:
-            cell = sheet.cell(row=j, column=i)
-            cell.value = x.name
-            i += 1
-
-        # Ext to data based on Tag.
-        # P/AFFO commented diff
-        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'Owner yield ratio',
-                      'Retained earnings ratio', 'DPU sen',
-                      # Add metric
-                      # TODO need to simplified the title
-                      'Rev per share', 'EPU', 'owner yield', 'ROIC', 'EV over EBIT', 'EBIT margin',
-                      'Retained earnings ratio', 'Market Cap/Retained ratio', 'Net debt over EBIT', 'Dividend yield',
-                      'Rev per share', 'EPU', 'owner yield', 'ROIC', 'EV over EBIT', 'EBIT margin', 'Net debt over EBIT', 'Dividend yield',
-                      'color', ]
-
-        # Current price, 5 years and current year
-        cell = sheet.cell(row=1, column=i)
-        cell.value = 'Current price'
-        cell = sheet.cell(row=1, column=i+9)
-        cell.value = '5 years'
-        cell = sheet.cell(row=1, column=i+19)
-        cell.value = 'Current year'
-
-        for x in range(len(ext_header)):
-            cell = sheet.cell(row=j, column=i+x)
-            cell.value = ext_header[x]
-        i += len(ext_header)
-
-        # TODO differential data, hmmm...
-        # i += 1
-        # cell = sheet.cell(row=j, column=i)
-        # cell.value = 'diff ev_over_ebit'
-        #
-        # i += 1
-        # cell = sheet.cell(row=j, column=i)
-        # cell.value = 'incr div yield'
-
-        # setting up color palette following
-        gen_rule = ColorScaleRule(start_type='percentile', start_value=10, start_color=ProfManager.Red,
-                                  mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
-                                  end_type='percentile', end_value=90, end_color=ProfManager.Green)
-        rule = {
-            # net_debt_over_ebit
-            Tag.net_debt_over_ebit:
-                ColorScaleRule(start_type='num', start_value=1., start_color=ProfManager.Green,
-                               mid_type='num', mid_value=8., mid_color=ProfManager.Yellow,
-                               end_type='num', end_value=10., end_color=ProfManager.Red),
-            # EV/EBIT
-            Tag.ev_over_ebit:
-                ColorScaleRule(start_type='num', start_value=10., start_color=ProfManager.Green,
-                               mid_type='num', mid_value=15., mid_color=ProfManager.Yellow,
-                               end_type='num', end_value=20., end_color=ProfManager.Red),
-            Tag.market_cap_ov_retained_earnings:
-                ColorScaleRule(start_type='num', start_value=.5, start_color=ProfManager.Green,
-                               mid_type='num', mid_value=.8, mid_color=ProfManager.Yellow,
-                               end_type='num', end_value=1.1, end_color=ProfManager.Red),
-            # diff EV/EBIT
-            'diff-ev_over_ebit':
-                ColorScaleRule(start_type='percentile', start_value=90, start_color=ProfManager.Green,
-                               mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
-                               end_type='percentile', end_value=10, end_color=ProfManager.Red),
-            'price_over_affo':
-                ColorScaleRule(start_type='num', start_value=0., start_color=ProfManager.Green,
-                               mid_type='num', mid_value=10., mid_color=ProfManager.Yellow,
-                               end_type='num', end_value=15., end_color=ProfManager.Red),
-            # Mid cap is between 200mil to 2bil.
-            # https://www.bursamalaysia.com/trade/our_products_services/indices/ftse_bursa_malaysia_indices/overview
-            'market_cap':
-            # https://coolors.co/palette/07beb8-3dccc7-68d8d6-9ceaef-c4fff9
-                ColorScaleRule(start_type='percentile', start_value=90, start_color='c4fff9',
-                               mid_type='percentile', mid_value=20, mid_color='9ceaef',
-                               end_type='percentile', end_value=10, end_color='3dccc7'),
-        }
-        start_row_index = row_margin+1
-        end_row_index = len(self.companies) + start_row_index + 1
-
-        j += 1
-        for c in self.companies:
-            # Table of mainly profile and last_price data
-            # print("Company", c.name)
-            lead = [
-                # TODO need to simplified the metrics
-                # Last 10 years metric
-                {'val': c.prof[Tag.rev_per_share]['val1'], 'rule': gen_rule},
-                {'val': c.prof[Tag.epu]['val1'], 'rule': gen_rule},
-                {'val': c.prof[Tag.owner_yield]['val1'], 'number': 'ratio', 'rule': gen_rule},
-                # AFFO and Tangible commented diffs
-                # {'val': c.prof[Tag.affo_per_share]['val1'], 'rule': gen_rule},
-                # {'val': c.prof[Tag.tangible_per_share]['val1'], 'rule': gen_rule},
-                # {'val': c.prof[Tag.nav_per_share]['val1'], 'rule': gen_rule},
-                {'val': c.prof[Tag.ROIC]['val1'], 'rule': gen_rule},
-                {'val': c.prof[Tag.net_debt_over_ebit]['val1'], 'number': 'ratio',
-                 'rule': rule[Tag.net_debt_over_ebit]},
-                {'val': c.prof[Tag.ev_over_ebit]['val1'], 'number': 'ratio',
-                 'rule': rule[Tag.ev_over_ebit]},
-                {'val': c.prof[Tag.op_margin]['val1'], 'rule': gen_rule},
-                {'val': c.prof[Tag.retained_earnings_ratio]['val1'], 'number': 'ratio', 'rule': gen_rule},
-                {'val': c.prof[Tag.market_cap_ov_retained_earnings]['val1'], 'number': 'ratio',
-                 'rule': rule[Tag.market_cap_ov_retained_earnings]},
-                {'val': c.prof[Tag.dividend_yield]['val1'], 'rule': gen_rule},
-
-                # Last price data
-                {'val': c.last_price['last_price'], 'number': 'value2'},
-                {'val': c.last_price['market_cap'], 'number': 'cap', 'rule': rule['market_cap']},
-                {'val': c.last_price['revenue'], 'number': 'cap', 'rule': rule['market_cap']},
-                {'val': c.last_price['op_income'], 'number': 'cap', 'rule': rule['market_cap']},
-                {'val': c.last_price['net_profit'], 'number': 'cap', 'rule': rule['market_cap']},
-                {'val': c.prof[Tag.epu]['val2'], 'number': 'value', 'rule': rule['market_cap']},
-                {'val': c.prof[Tag.owner_yield]['val2'], 'number': 'value', 'rule': rule['market_cap']},
-                {'val': c.prof[Tag.retained_earnings_ratio]['val2'], 'number': 'value', 'rule': rule['market_cap']},
-                # x100 - KLSE/Bursa DPU use fractional pricing model
-                {'val': c.last_price['dpu']*100, 'number': 'value', 'rule': rule['market_cap']},
-                # P/AFFO commented diff
-                # {'val': c.last_price['price_over_affo'], 'number': 'value', 'rule': rule['price_over_affo']},
-
-                # Stats at half interval metric
-                {'val': c.prof[Tag.rev_per_share]['val2'], 'rule': gen_rule},
-                {'val': c.prof[Tag.epu]['val2'], 'rule': gen_rule},
-                {'val': c.prof[Tag.owner_yield]['val2'], 'number': 'ratio', 'rule': gen_rule},
-                {'val': c.prof[Tag.ROIC]['val2'], 'rule': gen_rule},
-                {'val': c.prof[Tag.ev_over_ebit]['val2'], 'number': 'ratio',
-                 'rule': rule[Tag.ev_over_ebit]},
-                {'val': c.prof[Tag.op_margin]['val2'], 'rule': gen_rule},
-                {'val': c.prof[Tag.retained_earnings_ratio]['val2'], 'number': 'ratio', 'rule': gen_rule},
-                {'val': c.prof[Tag.market_cap_ov_retained_earnings]['val2'], 'number': 'ratio',
-                 'rule': rule[Tag.market_cap_ov_retained_earnings]},
-                {'val': c.prof[Tag.net_debt_over_ebit]['val2'], 'number': 'ratio',
-                 'rule': rule[Tag.net_debt_over_ebit]},
-                {'val': c.prof[Tag.dividend_yield]['val2'], 'rule': gen_rule},
-
-                # Stats at the last interval metric
-                {'val': c.prof[Tag.rev_per_share]['val3'], 'rule': gen_rule},
-                {'val': c.prof[Tag.epu]['val3'], 'rule': gen_rule},
-                {'val': c.prof[Tag.owner_yield]['val3'], 'number': 'ratio', 'rule': gen_rule},
-                {'val': c.prof[Tag.ROIC]['val3'], 'rule': gen_rule},
-                {'val': c.prof[Tag.ev_over_ebit]['val3'], 'number': 'ratio',
-                 'rule': rule[Tag.ev_over_ebit]},
-                {'val': c.prof[Tag.op_margin]['val3'], 'rule': gen_rule},
-                {'val': c.prof[Tag.net_debt_over_ebit]['val3'], 'number': 'ratio',
-                 'rule': rule[Tag.net_debt_over_ebit]},
-                {'val': c.prof[Tag.dividend_yield]['val3'], 'rule': gen_rule},
-            ]
-
-            i = 1
-            cell = sheet.cell(row=j, column=i)
-            cell.value = c.name
-
-            i += 1
-            for x in lead:
-                cell = sheet.cell(row=j, column=i)
-                assert 'val' in x
-                if type(x['val']) is complex:
-                    # TODO Not a number
-                    cell.value = 'NaN'
-                else:
-                    cell.value = x['val']
-                if 'number' in x:
-                    cell.style = 'Comma'
-                    if x['number'] == 'cap':
-                        if len(str(abs(math.floor(cell.value)))) > 3:
-                            cell.number_format = "0,000.00"
-                        else:
-                            cell.number_format = '0.00'
-                    elif x['number'] == 'value2':
-                        cell.number_format = '0.00'
-                        # test if we got enough decimal points
-                        # Decimal point can be enabled using DECIMALS TO DISPLAY in TIKR terminal
-                        if 0 != decimal.Decimal(c.last_price['last_price']*10**3).as_tuple().exponent:
-                            cell.number_format = '0.000'
-                    else:
-                        # set number format to value/ratio
-                        cell.number_format = '0.00'
-                else:
-                    cell.style = 'Percent'
-                    cell.number_format = '0.00%'
-                cell.font = ft
-
-                if 'rule' in x:
-                    sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
-                        alpha=colnum_string(i), start=start_row_index, end=end_row_index),
-                        x['rule'])
-                i += 1
-
-            # adding last column for color
-            cell = sheet.cell(row=j, column=i)
-            cell.value = benched['score'][c.name]
-            cell.number_format = '0.0'
-            sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
-                alpha=colnum_string(i), start=start_row_index, end=end_row_index), gen_rule)
-            i += 1
-
-            j += 1
-        wb.save('output.xlsx')
+    def output(self, benched: Dict[str, dict]):
+        # benched to access 'score' by company's name
+        wrap = WorkWrap(self.companies, benched)
+        wrap.start()
 
     def benchmark(self):
         # Grading process
@@ -1183,3 +984,208 @@ class ProfManager:
         print("\nThe following quotes were rated at below average rating though")
         _([RateType.below_avg])
 
+
+class WorkWrap:
+
+    start_col = 2
+    row_margin = 1
+
+    # TODO differential data, hmmm...
+    # i += 1
+    # cell = sheet.cell(row=j, column=i)
+    # cell.value = 'diff ev_over_ebit'
+    #
+    # i += 1
+    # cell = sheet.cell(row=j, column=i)
+    # cell.value = 'incr div yield'
+
+    # setting up color palette following
+    gen_rule = ColorScaleRule(start_type='percentile', start_value=10, start_color=ProfManager.Red,
+                              mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
+                              end_type='percentile', end_value=90, end_color=ProfManager.Green)
+    rule = {
+        # net_debt_over_ebit
+        Tag.net_debt_over_ebit:
+            ColorScaleRule(start_type='num', start_value=1., start_color=ProfManager.Green,
+                           mid_type='num', mid_value=8., mid_color=ProfManager.Yellow,
+                           end_type='num', end_value=10., end_color=ProfManager.Red),
+        # EV/EBIT
+        Tag.ev_over_ebit:
+            ColorScaleRule(start_type='num', start_value=10., start_color=ProfManager.Green,
+                           mid_type='num', mid_value=15., mid_color=ProfManager.Yellow,
+                           end_type='num', end_value=20., end_color=ProfManager.Red),
+        Tag.market_cap_ov_retained_earnings:
+            ColorScaleRule(start_type='num', start_value=.5, start_color=ProfManager.Green,
+                           mid_type='num', mid_value=.8, mid_color=ProfManager.Yellow,
+                           end_type='num', end_value=1.1, end_color=ProfManager.Red),
+        # diff EV/EBIT
+        'diff-ev_over_ebit':
+            ColorScaleRule(start_type='percentile', start_value=90, start_color=ProfManager.Green,
+                           mid_type='percentile', mid_value=50, mid_color=ProfManager.Yellow,
+                           end_type='percentile', end_value=10, end_color=ProfManager.Red),
+        'price_over_affo':
+            ColorScaleRule(start_type='num', start_value=0., start_color=ProfManager.Green,
+                           mid_type='num', mid_value=10., mid_color=ProfManager.Yellow,
+                           end_type='num', end_value=15., end_color=ProfManager.Red),
+        # Mid cap is between 200mil to 2bil.
+        # https://www.bursamalaysia.com/trade/our_products_services/indices/ftse_bursa_malaysia_indices/overview
+        'market_cap':
+        # https://coolors.co/palette/07beb8-3dccc7-68d8d6-9ceaef-c4fff9
+            ColorScaleRule(start_type='percentile', start_value=90, start_color='c4fff9',
+                           mid_type='percentile', mid_value=20, mid_color='9ceaef',
+                           end_type='percentile', end_value=10, end_color='3dccc7'),
+    }
+
+    def __init__(self, companies: List[Prof], benched: Dict[str, dict]):
+        self.companies = companies
+        # benched to access 'score' by company's name
+        self.benched = benched
+        self.ft = Font(name='Calibri', size=11)
+        self.wb = Workbook()
+        self.sheet = self.wb.active
+        self.sheet.title = 'sheet 1'
+        self.cell = self.sheet.cell(row=1, column=WorkWrap.start_col)
+        self.start_row_index = WorkWrap.row_margin+1
+        self.end_row_index = len(self.companies) + self.start_row_index+1
+
+        self.j = WorkWrap.row_margin + 1
+        self.i = 2
+
+        self.init_sheet()
+
+    def init_sheet(self):
+        # 10, 5 years and current year
+        sheet = self.sheet
+        cell = self.cell
+        cell.value = '10 years'
+        cell = self.sheet.cell(row=1, column=WorkWrap.start_col+len(Tag))
+        cell.value = '5 years'
+        cell = self.sheet.cell(row=1, column=WorkWrap.start_col+2*len(Tag))
+        cell.value = 'Current year'
+
+        # Additional 3 columns.
+        for _ in range(1, 4):
+            for x in Tag:
+                cell = sheet.cell(row=self.j, column=self.i)
+                cell.value = x.name
+                self.i += 1
+
+        # add extension header
+        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'Owner yield ratio',
+                      'Retained earnings ratio', 'DPU sen', 'Color']
+        for x in ext_header:
+            cell = sheet.cell(row=self.j, column=self.i)
+            cell.value = x
+            self.i += 1
+
+    def start(self):
+        self.j += 1
+        for c in self.companies:
+            # Table of mainly profile and last_price data
+            # print("Company", c.name)
+            self.i = 1
+            cell = self.sheet.cell(row=self.j, column=self.i)
+            cell.value = c.name
+
+            self.i += 1
+            for ri in range(1, 4):
+                self.build_lead(c, ri)
+            self.build_suffix(c)
+
+            # adding last column for color
+            cell = self.sheet.cell(row=self.j, column=self.i)
+            cell.value = self.benched['score'][c.name]
+            cell.number_format = '0.0'
+            self.sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+                alpha=colnum_string(self.i), start=self.start_row_index, end=self.end_row_index),
+                WorkWrap.gen_rule)
+            self.i += 1
+
+            self.j += 1
+        self.wb.save('output.xlsx')
+
+    def build_lead(self, com: Prof, range_index: int):
+        gen_rule = WorkWrap.gen_rule
+        rule = WorkWrap.rule
+        lead = [
+            # Last 10 years metric
+            {'val': com.prof[Tag.rev_per_share]['val{}'.format(range_index)], 'rule': gen_rule},
+            {'val': com.prof[Tag.epu]['val{}'.format(range_index)], 'rule': gen_rule},
+            {'val': com.prof[Tag.owner_yield]['val{}'.format(range_index)], 'number': 'ratio', 'rule': gen_rule},
+            # AFFO and Tangible commented diffs
+            # {'val': c.prof[Tag.affo_per_share]['val{}'.format(_)], 'rule': gen_rule},
+            # {'val': c.prof[Tag.tangible_per_share]['val{}'.format(_)], 'rule': gen_rule},
+            # {'val': c.prof[Tag.nav_per_share]['val{}'.format(_)], 'rule': gen_rule},
+            {'val': com.prof[Tag.ROIC]['val{}'.format(range_index)], 'rule': gen_rule},
+            {'val': com.prof[Tag.net_debt_over_ebit]['val{}'.format(range_index)], 'number': 'ratio',
+             'rule': rule[Tag.net_debt_over_ebit]},
+            {'val': com.prof[Tag.ev_over_ebit]['val{}'.format(range_index)], 'number': 'ratio',
+             'rule': rule[Tag.ev_over_ebit]},
+            {'val': com.prof[Tag.op_margin]['val{}'.format(range_index)], 'rule': gen_rule},
+            {'val': com.prof[Tag.retained_earnings_ratio]['val{}'.format(range_index)], 'number': 'ratio',
+             'rule': gen_rule},
+            {'val': com.prof[Tag.market_cap_ov_retained_earnings]['val{}'.format(range_index)], 'number': 'ratio',
+             'rule': rule[Tag.market_cap_ov_retained_earnings]},
+            {'val': com.prof[Tag.dividend_yield]['val{}'.format(range_index)], 'rule': gen_rule},
+        ]
+
+        for x in lead:
+            self.build_sheet(x)
+
+    def build_sheet(self, ent: Dict[str, Union[str, float, ColorScaleRule]]):
+        # The dict arg is a key of val, rule and number to combo of float, number, color rule tuples
+
+        cell = self.sheet.cell(row=self.j, column=self.i)
+        assert 'val' in ent
+        if type(ent['val']) is complex:
+            # TODO Not a number
+            cell.value = 'NaN'
+        else:
+            cell.value = ent['val']
+        if 'number' in ent:
+            cell.style = 'Comma'
+            if ent['number'] == 'cap':
+                if len(str(abs(math.floor(cell.value)))) > 3:
+                    cell.number_format = "0,000.00"
+                else:
+                    cell.number_format = '0.00'
+            elif ent['number'] == 'value2':
+                cell.number_format = '0.00'
+                # TODO test if we got enough decimal points
+                # Decimal point can be enabled using DECIMALS TO DISPLAY in TIKR terminal
+                # if 0 != decimal.Decimal(c.last_price['last_price']*10**3).as_tuple().exponent:
+                #     cell.number_format = '0.000'
+            else:
+                # set number format to value/ratio
+                cell.number_format = '0.00'
+        else:
+            cell.style = 'Percent'
+            cell.number_format = '0.00%'
+        cell.font = self.ft
+
+        if 'rule' in ent:
+            self.sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+                alpha=colnum_string(self.i), start=self.start_row_index, end=self.end_row_index),
+                ent['rule'])
+        self.i += 1
+
+    def build_suffix(self, com: Prof):
+        rule = WorkWrap.rule
+
+        # Last price data
+        suffix = [
+            {'val': com.last_price['last_price'], 'number': 'value2'},
+            {'val': com.last_price['market_cap'], 'number': 'cap', 'rule': rule['market_cap']},
+            {'val': com.last_price['revenue'], 'number': 'cap', 'rule': rule['market_cap']},
+            {'val': com.last_price['op_income'], 'number': 'cap', 'rule': rule['market_cap']},
+            {'val': com.last_price['net_profit'], 'number': 'cap', 'rule': rule['market_cap']},
+            {'val': com.prof[Tag.epu]['val2'], 'number': 'value', 'rule': rule['market_cap']},
+            {'val': com.prof[Tag.owner_yield]['val2'], 'number': 'value', 'rule': rule['market_cap']},
+            {'val': com.prof[Tag.retained_earnings_ratio]['val2'], 'number': 'value', 'rule': rule['market_cap']},
+            # x100 - KLSE/Bursa DPU use fractional pricing model
+            {'val': com.last_price['dpu'] * 100, 'number': 'value', 'rule': rule['market_cap']},
+            # P/AFFO commented diff
+            # {'val': c.last_price['price_over_affo'], 'number': 'value', 'rule': rule['price_over_affo']},
+        ]
+        for x in suffix:
+            self.build_sheet(x)
