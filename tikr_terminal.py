@@ -1,5 +1,5 @@
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Font, Alignment
 from openpyxl.worksheet import worksheet
 # from openpyxl.styles.differential import DifferentialStyle
 from openpyxl.formatting.rule import ColorScaleRule, CellIsRule, FormulaRule
@@ -1042,8 +1042,11 @@ class WorkWrap:
         self.benched = benched
         self.ft = Font(name='Calibri', size=11)
         self.wb = Workbook()
+
+        # type: worksheet.Worksheet
         self.sheet = self.wb.active
         self.sheet.title = 'sheet 1'
+
         self.cell = self.sheet.cell(row=1, column=WorkWrap.start_col)
         self.start_row_index = WorkWrap.row_margin+1
         self.end_row_index = len(self.companies) + self.start_row_index+1
@@ -1063,19 +1066,35 @@ class WorkWrap:
         cell = self.sheet.cell(row=1, column=WorkWrap.start_col+2*len(Tag))
         cell.value = 'Current year'
 
+        Tag_to_long = {
+            Tag.rev_per_share: 'Sales per share',
+            Tag.epu: 'EPS',
+            Tag.owner_yield: 'FCF per share',
+            Tag.ROIC: 'ROIC',
+            Tag.net_debt_over_ebit: 'Net debt /EBIT',
+            Tag.ev_over_ebit: 'EV/EBIT',
+            Tag.op_margin: 'Op margin',
+            Tag.retained_earnings_ratio: 'Retained /Net',
+            Tag.market_cap_ov_retained_earnings: 'Market /Retained',
+            Tag.dividend_yield: 'Dividend yield',
+        }
+
         # Additional 3 columns.
         for _ in range(1, 4):
             for x in Tag:
+                sheet.column_dimensions[colnum_string(self.i)].width = 10
                 cell = sheet.cell(row=self.j, column=self.i)
-                cell.value = x.name
+                cell.alignment = Alignment(wrapText=True)
+                cell.value = Tag_to_long[x]
                 self.i += 1
 
         # add extension header
-        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'Owner yield ratio',
-                      'Retained earnings ratio', 'DPU sen', 'Color']
+        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'FCF ratio',
+                      'Retained ratio', 'DPU sen', 'Color']
         for x in ext_header:
             cell = sheet.cell(row=self.j, column=self.i)
             cell.value = x
+            cell.alignment = Alignment(wrapText=True)
             self.i += 1
 
     def start(self):
