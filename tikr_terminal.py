@@ -267,6 +267,7 @@ class Spread:
                                val3=last_cagr_epu_ratio)
 
     def owner_yield(self):
+        # also known as Levered FCF
         earning_not_strip = self.cashflow.match_title('Free Cash Flow$', none_is_optional=True)
         if earning_not_strip is not None:
             earning = self.strip(earning_not_strip)
@@ -284,7 +285,7 @@ class Spread:
             earning_yield[0], earning_yield[-1],
             avg_yield, earning_yield))
         self.profiler._collect(avg_yield, Tag.owner_yield, ProfMethod.Average,
-                               val2=average(earning_yield[self.half_len:]),
+                               val2=statistics.median(earning_yield[self.half_len:]),
                                val3=earning_yield[-1])
 
     def cfo(self):
@@ -662,7 +663,7 @@ class Spread:
         # AFFO commented diff
         # 'price_over_affo': price_over_affo})
 
-    def share_out_filing(self) -> float:
+    def share_out_filing(self) -> [float]:
         # "Total Shares Out. Filing Date" is provided in Balance Sheet which computed as fully year
         # or last trailing year I think.
         # TODO Currently it is being replace by "Weighted Average Diluted Shares Outstanding"
@@ -670,7 +671,7 @@ class Spread:
         result = list(filter(None, reversed(x[self.start_prefix:])))[0]
         return result
 
-    def wa_diluted_shares_out(self) -> float:
+    def wa_diluted_shares_out(self) -> [float]:
         result = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
         return result
 
