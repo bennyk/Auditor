@@ -5,15 +5,19 @@ from openpyxl import load_workbook
 from spread import Spread
 from utils import *
 import numpy as np
+from tabulate import tabulate
+from typing import List, Tuple, Dict, Union
 
 
 class DCF(Spread):
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, tick, path):
+        self.wb = load_workbook(path + '/' + tick + '.xlsx')
+        super().__init__(self.wb, tick)
 
         self.wacc = .1
         self.tgr = .025
         self.term_dr = 1/(self.wacc-self.tgr)
+        self.sum_pvtv = []
 
     def wa_diluted_shares_out(self) -> float:
         result = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
@@ -73,26 +77,48 @@ class DCF(Spread):
 
         # https://www.investopedia.com/terms/t/terminalvalue.asp
         tv = []
-        sum_pvtv = []
         for m in [self.tv_avg_fcf, self.tv_last_fcf, self.tv_ebitda]:
             _ = m(fcf)
             tv.append(_)
-            sum_pvtv.append(sum(pv)+_)
+            self.sum_pvtv.append(sum(pv)+_)
 
         # TODO table fix
         # https://blog.devgenius.io/how-to-easily-print-and-format-tables-in-python-18bbe2e59f5f
         print('tv\t\t\t', np.around(tv, decimals=2))
-        print('sum_pvtv\t', np.around(sum_pvtv, decimals=2))
+        print('sum_pvtv\t', np.around(self.sum_pvtv, decimals=2))
         print()
 
         # adbe
         # fcf = [15.6, 18.72, 21.53, 24.76, 28.47, 30.6, 32.9, 35.36, 38.02, 40.87, 708.47]
 
 
-# tickers = tradingview.TradingView().fetch()
-tickers = ['adbe', 'intu', 'sap', 'intc', 'qcom', 'googl', 'meta', 'txn', 'mu', 'asml', 'cdb', 'tm']
-path = "spreads"
-for tick in tickers:
-    wb = load_workbook(path + '/' + tick + '.xlsx')
-    spread = DCF(wb, tick)
-    spread.compute_fcf()
+class Ticks:
+    def __init__(self, ticks, path):
+        self.tickers = ticks
+        self.path = path
+
+        # type: List[DCF]
+        self.spreads = []
+        for t in ticks:
+            self.spreads.append(DCF(t, self.path))
+
+    def compute(self):
+        for sp in self.spreads:
+            sp.compute_fcf()
+
+    def summarize(self):
+        # summarize to TV avg FCF, last FCF and EBITDA
+        a = list(map(lambda x: [x.tick, x.sum_pvtv[0], x.sum_pvtv[1], x.sum_pvtv[2]], self.spreads))
+        print(tabulate(a, headers=['TV avg. FCF', 'TV last FCF', 'TV EBITDA'],
+                       tablefmt='fancy_grid', stralign='center', numalign='center', floatfmt=".2f"))
+
+
+if __name__ == '__main__':
+    # tickers = tradingview.TradingView().fetch()
+    tickers = ['adbe', 'intu', 'sap', 'googl', 'meta', 'msft',
+               'intc', 'qcom', 'txn', 'mu', 'asml',
+               'cdb', 'tm']
+    ticks = Ticks(tickers, 'spreads')
+    ticks.compute()
+    ticks.summarize()
+
