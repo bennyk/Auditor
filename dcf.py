@@ -17,6 +17,8 @@ class DCF(Spread):
         self.tgr = .025
         self.term_dr = 1/(self.wacc-self.tgr)
         self.sum_pvtv = []
+        self.last_price = None
+        self.poss_ratio = None
 
     def wa_diluted_shares_out(self) -> float:
         result = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
@@ -69,6 +71,8 @@ class DCF(Spread):
 
     def compute_fcf(self):
         print(self.tick)
+        self.last_price = self.values.match_title('Price$')[-1]
+        print("last price", self.last_price)
         fcf = self.fcf()
         nper = len(fcf)
 
@@ -88,22 +92,30 @@ class DCF(Spread):
         tv = []
         last_dr = []
         pvtv = []
+        self.poss_ratio = []
         for m in [self.tv_last_fcf, self.tv_avg_fcf,
                   bind(NOPAT(self), tv_multiple_nopat_5x),
                   bind(NOPAT(self), tv_multiple_nopat_8x)]:
             _tv = m(fcf=fcf)
             _dr = 1 / (1+self.wacc) ** nper
             _pvtv = _dr * _tv
+            _sum_pvtv = sum(pv) + _pvtv
+
+            # Possible ratio of sum_pvtv vs last price, assuming buying at purchase price
+            # https://www.investopedia.com/ask/answers/how-do-you-calculate-percentage-gain-or-loss-investment
+            _poss_ratio = (_sum_pvtv-self.last_price) / self.last_price
 
             tv.append(_tv)
             last_dr.append(_dr)
             pvtv.append(_pvtv)
-            self.sum_pvtv.append(sum(pv) + _pvtv)
+            self.sum_pvtv.append(_sum_pvtv)
+            self.poss_ratio.append(_poss_ratio)
 
         print('tv\t\t\t', np.around(tv, decimals=2))
         print('dr\t\t\t', np.around(last_dr, decimals=2))
         print('pvtv\t\t', np.around(pvtv, decimals=2))
         print('sum_pvtv\t', np.around(self.sum_pvtv, decimals=2))
+        print('poss_ratio\t\t', np.around(self.poss_ratio, decimals=2))
         print()
 
         # adbe
@@ -163,18 +175,28 @@ class Ticks:
     def summarize(self):
         # https://blog.devgenius.io/how-to-easily-print-and-format-tables-in-python-18bbe2e59f5f
         # summarize to TV based on last FCF, avg FCF, multiple of NOPAT
-        a = list(map(lambda x: [x.tick, x.sum_pvtv[0], x.sum_pvtv[1],
-                                x.sum_pvtv[2], x.sum_pvtv[3]], self.spreads))
-        print(tabulate(a, headers=['Last FCF', 'Avg FCF', 'NOPAT 5x', 'NOPAT 8x'],
+        a = list(map(lambda x: [x.tick, x.last_price,
+                                x.sum_pvtv[0], x.poss_ratio[0],
+                                x.sum_pvtv[1], x.poss_ratio[1],
+                                x.sum_pvtv[2], x.poss_ratio[2],
+                                x.sum_pvtv[3], x.poss_ratio[3]],
+                     self.spreads))
+        # Sort it to the last column which is 'Possible' ratio
+        b = sorted(a, key=lambda x: x[len(a[0])-1])
+        poss_header = 'Poss. x'
+        print(tabulate(b, headers=['Last price',
+                                   'Last FCF', poss_header,
+                                   'Avg. FCF', poss_header,
+                                   'NOPAT 5x', poss_header,
+                                   'NOPAT 8x', poss_header],
                        tablefmt='fancy_grid', stralign='center', numalign='center', floatfmt=".2f"))
 
 
 if __name__ == '__main__':
     # tickers = tradingview.TradingView().fetch()
-    tickers = ['adbe', 'intu', 'sap', 'googl', 'meta', 'msft', 'aapl', 'atvi',
-               'intc', 'qcom', 'txn', 'mu', 'asml', 'nvda', 'amd',
+    tickers = ['adbe', 'intu', 'sap', 'googl', 'meta', 'msft', 'aapl', 'atvi', 'dis',
+               'intc', 'qcom', 'txn', 'mu', 'asml', 'nvda', 'amd', 'tsm',
                'cdb', 'tm', 'vitrox']
-    # tickers = ['tm', 'googl']
     t = Ticks(tickers, 'spreads')
     t.compute()
     t.summarize()
