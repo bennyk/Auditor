@@ -1,11 +1,96 @@
 import tradingview
 from openpyxl import load_workbook
+from openpyxl.formatting.rule import ColorScaleRule
+from openpyxl.styles import Font, Alignment
+from openpyxl.workbook import Workbook
+from openpyxl.worksheet import worksheet
 
 from spread import Spread
 from utils import *
 import numpy as np
 from tabulate import tabulate
 from typing import List
+
+
+class ExcelOut:
+    Red = 'FF9AA2'
+    Yellow = 'FFDAC1'
+    # Green = 'E2F0CB'
+    Green = 'B5EAD7'
+
+    start_col = 2
+    row_margin = 1
+
+    # Setting up color palette following
+    gen_rule = ColorScaleRule(start_type='percentile', start_value=10, start_color=Red,
+                              mid_type='percentile', mid_value=50, mid_color=Yellow,
+                              end_type='percentile', end_value=90, end_color=Green)
+
+    def __init__(self, ticks: [str], entries, styles=None, headers=None):
+        cls = self.__class__
+        self.entries = entries
+        self.headers = headers
+        self.ticks = ticks
+        self.styles = styles
+        self.ft = Font(name='Calibri', size=11)
+        self.wb = Workbook()
+
+        # type: worksheet.Worksheet
+        self.sheet = self.wb.active
+        self.sheet.title = 'sheet 1'
+
+        self.cell = self.sheet.cell(row=1, column=cls.start_col)
+        self.start_row_index = cls.row_margin+1
+        self.end_row_index = len(self.ticks) + self.start_row_index+1
+
+        self.j = cls.row_margin + 1
+        self.i = 1
+
+        self.init_sheet()
+
+    def init_sheet(self):
+        sheet = self.sheet
+        self.j = 1
+        self.i = 2
+        for e in self.headers:
+            sheet.column_dimensions[colnum_string(self.i)].width = 10.5
+            cell = sheet.cell(row=self.j, column=self.i)
+            cell.alignment = Alignment(wrapText=True)
+            cell.value = e
+            self.i += 1
+        self.j += 1
+
+    def start(self):
+        cls = self.__class__
+        self.j = cls.row_margin + 1
+        for ent in self.entries:
+            # Table of mainly profile and last_price data
+            print("Company", ent)
+            self.i = 1
+            for i, e in enumerate(ent):
+                self.make_cell(e, self.styles[i])
+
+            for i, s in enumerate(self.styles, 1):
+                if s == 'Percent':
+                    self.sheet.conditional_formatting.add('{alpha}{start}:{alpha}{end}'.format(
+                        alpha=colnum_string(i), start=self.start_row_index, end=self.end_row_index),
+                        cls.gen_rule)
+            self.j += 1
+        self.wb.save('dcf_out.xlsx')
+
+    def make_cell(self, e, style):
+        cell = self.sheet.cell(row=self.j, column=self.i)
+        # sheet.column_dimensions[colnum_string(self.i)].width = 10
+        cell.alignment = Alignment(wrapText=True)
+        cell.value = e
+        if style == 'Comma':
+            cell.style = 'Comma'
+            cell.number_format = '0.00'
+        else:
+            cell.style = 'Percent'
+            cell.number_format = '0.00%'
+        cell.font = self.ft
+        self.i += 1
 
 
 class DCF(Spread):
@@ -182,14 +267,24 @@ class Ticks:
                                 x.sum_pvtv[3], x.poss_ratio[3]],
                      self.spreads))
         # Sort it to the last column which is 'Possible' ratio
-        b = sorted(a, key=lambda x: x[len(a[0])-1])
+        entries = sorted(a, key=lambda x: x[len(a[0])-1])
         poss_header = 'Poss. x'
-        print(tabulate(b, headers=['Last price',
-                                   'Last FCF', poss_header,
-                                   'Avg. FCF', poss_header,
-                                   'NOPAT 5x', poss_header,
-                                   'NOPAT 8x', poss_header],
+        heads = ['Last price',
+                 'Last FCF', poss_header,
+                 'Avg. FCF', poss_header,
+                 'NOPAT 5x', poss_header,
+                 'NOPAT 8x', poss_header]
+        print(tabulate(entries, headers=heads,
                        tablefmt='fancy_grid', stralign='center', numalign='center', floatfmt=".2f"))
+
+        # generate Excel output
+        styles = ['Comma', 'Comma',
+                  'Comma', 'Percent',
+                  'Comma', 'Percent',
+                  'Comma', 'Percent',
+                  'Comma', 'Percent']
+        excel = ExcelOut(self.tickers, entries, styles=styles, headers=heads)
+        excel.start()
 
 
 if __name__ == '__main__':
