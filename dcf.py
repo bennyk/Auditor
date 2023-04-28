@@ -65,7 +65,7 @@ class ExcelOut:
         self.j = cls.row_margin + 1
         for ent in self.entries:
             # Table of mainly profile and last_price data
-            print("Company", ent)
+            # print("Company", ent)
             self.i = 1
             for i, e in enumerate(ent):
                 self.make_cell(e, self.styles[i])
@@ -99,7 +99,10 @@ class DCF(Spread):
         super().__init__(self.wb, tick)
 
         self.wacc = .1
-        self.tgr = .025
+
+        # Forecast in 2027
+        self.tgr = .0212
+        # self.tgr = .0595
         self.term_dr = 1/(self.wacc-self.tgr)
         self.sum_pvtv = []
         self.last_price = None
@@ -290,8 +293,7 @@ class Ticks:
 if __name__ == '__main__':
     # tickers = tradingview.TradingView().fetch()
     tickers = ['adbe', 'intu', 'sap', 'googl', 'meta', 'msft', 'aapl', 'atvi', 'dis',
-               'intc', 'qcom', 'txn', 'mu', 'asml', 'nvda', 'amd', 'tsm',
-               'cdb', 'tm', 'vitrox']
+               'intc', 'qcom', 'txn', 'mu', 'asml', 'nvda', 'amd', 'tsm', ]
     t = Ticks(tickers, 'spreads')
     t.compute()
     t.summarize()
