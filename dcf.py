@@ -4,12 +4,20 @@ from openpyxl.formatting.rule import ColorScaleRule
 from openpyxl.styles import Font, Alignment
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet import worksheet
-
-from spread import Spread
-from utils import *
 import numpy as np
 from tabulate import tabulate
 from typing import List
+from enum import Enum
+
+from spread import Spread
+from utils import *
+
+
+class Mode(Enum):
+    Last_FCF = 1
+    Avg_FCF = 2
+    NOPAT_5x = 3
+    NOPAT_8x = 4
 
 
 class ExcelOut:
@@ -94,7 +102,7 @@ class ExcelOut:
 
 
 class DCF(Spread):
-    def __init__(self, tick, path):
+    def __init__(self, tick, path, modes: [Mode]):
         self.wb = load_workbook(path + '/' + tick + '.xlsx')
         super().__init__(self.wb, tick)
 
@@ -107,6 +115,7 @@ class DCF(Spread):
         self.sum_pvtv = []
         self.last_price = None
         self.poss_ratio = None
+        self.modes = modes
 
     def wa_diluted_shares_out(self) -> float:
         result = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
@@ -181,9 +190,15 @@ class DCF(Spread):
         last_dr = []
         pvtv = []
         self.poss_ratio = []
-        for m in [self.tv_last_fcf, self.tv_avg_fcf,
-                  bind(NOPAT(self), tv_multiple_nopat_5x),
-                  bind(NOPAT(self), tv_multiple_nopat_8x)]:
+
+        # TODO mapping to the underlying implementation
+        calc_fcf = list(map(lambda x: {
+            Mode.Last_FCF: self.tv_last_fcf,
+            Mode.Avg_FCF: self.tv_avg_fcf,
+            Mode.NOPAT_5x: bind(NOPAT(self), tv_multiple_nopat_5x),
+            Mode.NOPAT_8x: bind(NOPAT(self), tv_multiple_nopat_8x),
+        }[x], self.modes))
+        for m in calc_fcf:
             _tv = m(fcf=fcf)
             _dr = 1 / (1+self.wacc) ** nper
             _pvtv = _dr * _tv
@@ -250,11 +265,17 @@ class Ticks:
     def __init__(self, ticks, path):
         self.tickers = ticks
         self.path = path
+        self.modes = [
+            Mode.Last_FCF,
+            Mode.Avg_FCF,
+            Mode.NOPAT_5x,
+            Mode.NOPAT_8x,
+        ]
 
         # type: List[DCF]
         self.spreads = []
         for t in ticks:
-            self.spreads.append(DCF(t, self.path))
+            self.spreads.append(DCF(t, self.path, self.modes))
 
     def compute(self):
         for sp in self.spreads:
@@ -263,29 +284,32 @@ class Ticks:
     def summarize(self):
         # https://blog.devgenius.io/how-to-easily-print-and-format-tables-in-python-18bbe2e59f5f
         # summarize to TV based on last FCF, avg FCF, multiple of NOPAT
-        a = list(map(lambda x: [x.tick, x.last_price,
-                                x.sum_pvtv[0], x.poss_ratio[0],
-                                x.sum_pvtv[1], x.poss_ratio[1],
-                                x.sum_pvtv[2], x.poss_ratio[2],
-                                x.sum_pvtv[3], x.poss_ratio[3]],
-                     self.spreads))
+
+        a = list(map(lambda x: [x.tick, x.last_price], self.spreads))
+        for i, s in enumerate(self.spreads):
+            for j in range(len(s.sum_pvtv)):
+                # extend the spread with sum_pvtv and poss ratio
+                a[i].append(s.sum_pvtv[j])
+                a[i].append(s.poss_ratio[j])
+
         # Sort it to the last column which is 'Possible' ratio
         entries = sorted(a, key=lambda x: x[len(a[0])-1])
         poss_header = 'Poss. x'
-        heads = ['Last price',
-                 'Last FCF', poss_header,
-                 'Avg. FCF', poss_header,
-                 'NOPAT 5x', poss_header,
-                 'NOPAT 8x', poss_header]
+        heads = ['Last price']
+        for i, m in enumerate(self.modes):
+            # TODO mapping to the underlying string
+            h = {Mode.Last_FCF: 'Last FCF',
+                 Mode.Avg_FCF: 'Avg. FCF',
+                 Mode.NOPAT_5x: 'NOPAT 5x',
+                 Mode.NOPAT_8x: 'NOPAT 8x'}[m]
+            heads.extend((h, poss_header))
         print(tabulate(entries, headers=heads,
                        tablefmt='fancy_grid', stralign='center', numalign='center', floatfmt=".2f"))
 
         # generate Excel output
-        styles = ['Comma', 'Comma',
-                  'Comma', 'Percent',
-                  'Comma', 'Percent',
-                  'Comma', 'Percent',
-                  'Comma', 'Percent']
+        styles = ['Comma', 'Comma']
+        for _ in self.modes:
+            styles.extend(('Comma', 'Percent'))
         excel = ExcelOut(self.tickers, entries, styles=styles, headers=heads)
         excel.start()
 
@@ -293,7 +317,7 @@ class Ticks:
 if __name__ == '__main__':
     # tickers = tradingview.TradingView().fetch()
     tickers = ['adbe', 'intu', 'sap', 'googl', 'meta', 'msft', 'aapl', 'atvi', 'dis',
-               'intc', 'qcom', 'txn', 'mu', 'asml', 'nvda', 'amd', 'tsm', ]
+               'intc', 'qcom', 'txn', 'mu', 'asml', 'nvda', 'amd', 'tsm', 'amzn', ]
     t = Ticks(tickers, 'spreads')
     t.compute()
     t.summarize()
