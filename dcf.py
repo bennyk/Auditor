@@ -184,11 +184,13 @@ class DCF(Spread):
         print('fcf', np.around(fcf, decimals=2))
         print('dr', np.around(dr, decimals=2))
         print('pv', np.around(pv, decimals=2))
+        print("sum of pv {:.2f}".format(sum(pv)))
 
         # https://www.investopedia.com/terms/t/terminalvalue.asp
         tv = []
         last_dr = []
         pvtv = []
+        pv_ov_pvtv = []
         self.poss_ratio = []
 
         # TODO mapping to the underlying implementation
@@ -203,6 +205,7 @@ class DCF(Spread):
             _dr = 1 / (1+self.wacc) ** nper
             _pvtv = _dr * _tv
             _sum_pvtv = sum(pv) + _pvtv
+            _pv_ov_pvtv = sum(pv)/_pvtv if _pvtv != 0 else float('nan')
 
             # Possible ratio of sum_pvtv vs last price, assuming buying at purchase price
             # https://www.investopedia.com/ask/answers/how-do-you-calculate-percentage-gain-or-loss-investment
@@ -211,6 +214,7 @@ class DCF(Spread):
             tv.append(_tv)
             last_dr.append(_dr)
             pvtv.append(_pvtv)
+            pv_ov_pvtv.append(_pv_ov_pvtv)
             self.sum_pvtv.append(_sum_pvtv)
             self.poss_ratio.append(_poss_ratio)
 
@@ -219,6 +223,7 @@ class DCF(Spread):
         print('pvtv\t\t', np.around(pvtv, decimals=2))
         print('sum_pvtv\t', np.around(self.sum_pvtv, decimals=2))
         print('poss_ratio\t\t', np.around(self.poss_ratio, decimals=2))
+        print('pv_ov_pvtv\t\t', np.around(pv_ov_pvtv, decimals=2))
         print()
 
         # adbe
