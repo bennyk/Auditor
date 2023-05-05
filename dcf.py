@@ -16,8 +16,8 @@ from utils import *
 class Mode(Enum):
     Last_FCF = 1
     Avg_FCF = 2
-    Earning_5x = 3
-    Earning_8x = 4
+    UFCF_5x = 3
+    UFCF_8x = 4
 
 
 class ExcelOut:
@@ -197,8 +197,8 @@ class DCF(Spread):
         calc_fcf = list(map(lambda x: {
             Mode.Last_FCF: self.tv_last_fcf,
             Mode.Avg_FCF: self.tv_avg_fcf,
-            Mode.Earning_5x: bind(Earning(self), tv_multiple_earning_5x),
-            Mode.Earning_8x: bind(Earning(self), tv_multiple_earning_8x),
+            Mode.UFCF_5x: bind(UFCF(self), tv_multiple_ufcf_5x),
+            Mode.UFCF_8x: bind(UFCF(self), tv_multiple_ufcf_8x),
         }[x], self.modes))
         for m in calc_fcf:
             _tv = m(fcf=fcf)
@@ -231,33 +231,37 @@ class DCF(Spread):
 
 
 # https://stackoverflow.com/questions/1015307/python-bind-an-unbound-method
-class Earning:
+class UFCF:
     def __init__(self, src: DCF):
         # ni = src.strip(src.income.match_title('Net Income$'))
-        earning = src.strip(src.income.match_title('EBITDA$'))
+        ufcf = src.strip(src.income.match_title('EBITDA$'))
         tax = src.strip(src.income.match_title('Income Tax Expense$'))
         # ie = self.strip(self.income.match_title('Interest Expense$'))
-        earning = list_add_list(earning, tax)
+        ufcf = list_add_list(ufcf, tax)
 
         capex = src.strip(src.cashflow.match_title('Capital Expenditure$'))
-        earning = list_add_list(earning, capex)
+        ufcf = list_add_list(ufcf, capex)
 
         work_cap = src.strip(src.cashflow.match_title('Memo: Change in Net Working Capital$'))
-        earning = list_add_list(earning, work_cap)
+        ufcf = list_add_list(ufcf, work_cap)
 
         # Ignore debt issuance/repaid for DCF?
         # ChatGPT:
         # In general, UFCF is more appropriate for comparing the cash-generating ability of different companies,
         # while LFCF is more appropriate for estimating the cash flow available to equity investors after accounting
         # for the company's debt obligations.
-        # debt_issued = src.strip(src.cashflow.match_title('Total Debt Issued$'))
-        # debt_repaid = src.strip(src.cashflow.match_title('Total Debt Repaid$'))
-        # earning = list_add_list(earning, debt_issued)
-        # earning = list_add_list(earning, debt_repaid)
+        if False:
+            # TODO assuming percent debt repaid?
+            # debt_issued = src.strip(src.cashflow.match_title('Total Debt Issued$'))
+            debt_repaid = src.strip(src.cashflow.match_title('Total Debt Repaid$'))
+            # earning = list_add_list(earning, debt_issued)
+            ufcf = list_add_list(ufcf, debt_repaid)
 
         # ebit = list_add_list(ebit, ie)
-        self.earning_per_share = list_over_list(
-            earning[src.half_len:], src.wa_diluted_shares_out()[src.half_len:])
+        self.ufcf_per_share = list_over_list(
+            ufcf[src.half_len:], src.wa_diluted_shares_out()[src.half_len:])
+        # ufcf, src.wa_diluted_shares_out())
+        # TODO option for half_len?
         self.tgr = src.tgr
         self.term_dr = src.term_dr
 
@@ -276,12 +280,12 @@ def bind(self, func, as_name=None):
 
 
 # TODO refactor?
-def tv_multiple_earning_5x(src: Earning, **kwargs):
-    return average(src.earning_per_share) * 5. * (1+src.tgr) * src.term_dr
+def tv_multiple_ufcf_5x(src: UFCF, **kwargs):
+    return average(src.ufcf_per_share) * 5. * (1+src.tgr) * src.term_dr
 
 
-def tv_multiple_earning_8x(src: Earning, **kwargs):
-    return average(src.earning_per_share) * 8. * (1+src.tgr) * src.term_dr
+def tv_multiple_ufcf_8x(src: UFCF, **kwargs):
+    return average(src.ufcf_per_share) * 8. * (1+src.tgr) * src.term_dr
 
 
 class Ticks:
@@ -291,8 +295,8 @@ class Ticks:
         self.modes = [
             Mode.Last_FCF,
             Mode.Avg_FCF,
-            Mode.Earning_5x,
-            Mode.Earning_8x,
+            Mode.UFCF_5x,
+            Mode.UFCF_8x,
         ]
 
         # type: List[DCF]
@@ -323,8 +327,8 @@ class Ticks:
             # TODO mapping to the underlying string
             h = {Mode.Last_FCF: 'Last FCF',
                  Mode.Avg_FCF: 'Avg. FCF',
-                 Mode.Earning_5x: 'Earns 5x',
-                 Mode.Earning_8x: 'Earns 8x'}[m]
+                 Mode.UFCF_5x: 'UFCF 5x',
+                 Mode.UFCF_8x: 'UFCF 8x'}[m]
             heads.extend((h, poss_header))
         print(tabulate(entries, headers=heads,
                        tablefmt='fancy_grid', stralign='center', numalign='center', floatfmt=".2f"))
