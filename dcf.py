@@ -11,6 +11,7 @@ from enum import Enum
 
 from spread import Spread
 from utils import *
+from bcolors import colour_print, bcolors
 
 
 class Mode(Enum):
@@ -106,6 +107,7 @@ class DCF(Spread):
         self.wb = load_workbook(path + '/' + tick + '.xlsx')
         super().__init__(self.wb, tick)
 
+        # TODO approximate WACC based on highest transaction recorded that investors willing to pay
         self.wacc = .1
 
         # Forecast in 2027
@@ -242,8 +244,13 @@ class UFCF:
         capex = src.strip(src.cashflow.match_title('Capital Expenditure$'))
         ufcf = list_add_list(ufcf, capex)
 
-        work_cap = src.strip(src.cashflow.match_title('Memo: Change in Net Working Capital$'))
-        ufcf = list_add_list(ufcf, work_cap)
+        _ = src.cashflow.match_title(
+            'Memo: Change in Net Working Capital$', none_is_optional=True)
+        if _ is not None:
+            work_cap = src.strip(_)
+            ufcf = list_add_list(ufcf, work_cap)
+        else:
+            colour_print('Missing NWC entry', bcolors.WARNING)
 
         # Ignore debt issuance/repaid for DCF?
         # ChatGPT:
@@ -343,8 +350,7 @@ class Ticks:
 
 if __name__ == '__main__':
     # tickers = tradingview.TradingView().fetch()
-    tickers = ['adbe', 'intu', 'sap', 'googl', 'meta', 'msft', 'aapl', 'atvi', 'dis', 'nflx',
-               'intc', 'qcom', 'txn', 'mu', 'asml', 'nvda', 'amd', 'tsm', 'amzn', 'adi' ]
+    tickers = []
     t = Ticks(tickers, 'spreads')
     t.compute()
     t.summarize()
