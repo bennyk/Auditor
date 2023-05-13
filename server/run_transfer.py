@@ -6,6 +6,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import MoveTargetOutOfBoundsException
 from openpyxl import Workbook, worksheet
+from bs4 import BeautifulSoup
 import pyperclip
 import re
 import time
@@ -14,6 +15,7 @@ import math
 
 from table import Page, fix_currency, fix_percent
 from bcolors import colour_print, bcolors
+import bootstrap
 
 global driver
 
@@ -107,16 +109,19 @@ class Clipboard:
         self.wb.remove(ws)
 
     def run(self, selection=None):
+        # TIKR's support decided to remove "Copy Table" button to comply with data provider or negotiate further
         if type(selection) is list:
             for t in selection:
                 self.select(t)
-                self.copy_table(t)
-                self.paste(t, pref_num_format='0.00')
+                self.write_excel(t)
+                # self.copy_table(t)
+                # self.paste(t, pref_num_format='0.00')
         elif type(selection) is str:
             # skipping selection dialog
             t = selection
-            self.copy_table(t)
-            self.paste(t, pref_num_format='0.00')
+            self.write_excel(t)
+            # self.copy_table(t)
+            # self.paste(t, pref_num_format='0.00')
 
     def select(self, title):
         # https://stackoverflow.com/questions/21713280/find-div-element-by-multiple-class-names
@@ -181,6 +186,41 @@ class Clipboard:
                 elif per_flag:
                     cell.number_format = '0.00%'
 
+    def write_excel(self, title):
+        soup = BeautifulSoup(driver.page_source, 'lxml')
+        a = [x for x in soup.find_all('table')]
+        assert len(a) == 1
+
+        bootstrap.Out = open('console.log', 'w')
+        with bootstrap.Out as out:
+            page = Page(a[0])
+            page.parse_top()
+            first_word = title.split()[0]
+            ws = self.wb.create_sheet(first_word)
+            pref_num_format = '0.00'
+            for row, row_data in enumerate(page.data, start=1):
+                for col, cell_val in enumerate(row_data, start=1):
+                    number_flag = False
+                    per_flag = False
+                    val = cell_val
+                    if type(cell_val) is float:
+                        number_flag = True
+                    elif type(cell_val) is str:
+                        if re.match(Page.re_percent, val):
+                            per_flag = True
+                            val = fix_percent(val)
+                    cell = ws.cell(row=row, column=col, value=val)
+                    if number_flag:
+                        if pref_num_format is not None:
+                            cell.number_format = pref_num_format
+                            if len(str(abs(math.floor(cell_val)))) > 3:
+                                # Numerical number larger than 3 digits add prefix
+                                cell.number_format = "0,00" + pref_num_format
+                        else:
+                            cell.number_format = '0,00'
+                    elif per_flag:
+                        cell.number_format = '0.00%'
+
     def save(self, ticker):
         self.wb.save('{}.xlsx'.format(ticker))
 
@@ -201,14 +241,16 @@ def run_main():
 
     driver.maximize_window()
 
-    elem = driver.find_element(By.ID, "input-12")
+    # TODO input ID?
+    input_id = 'input-11'
+    elem = driver.find_element(By.ID, input_id)
     with open('meow.txt') as f:
         if elem is not None:
             # elem.clear()
             elem.send_keys(f.readline())
             elem.send_keys(Keys.RETURN)
 
-        elem = driver.find_element(By.ID, "input-15")
+        elem = driver.find_element(By.ID, "input-14")
         if elem is not None:
             elem.send_keys(f.readline())
             elem.send_keys(Keys.RETURN)
@@ -216,7 +258,7 @@ def run_main():
     # https://www.selenium.dev/documentation/webdriver/waits/
     print("wait until username")
     WebDriverWait(driver, 10).until(
-        EC.presence_of_element_located((By.ID, "input-12"))
+        EC.presence_of_element_located((By.ID, input_id))
     )
     print("got it")
 
