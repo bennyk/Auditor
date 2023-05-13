@@ -30,7 +30,7 @@ def fix_currency(value):
     return int(val)
 
 
-def fix_percent(value):
+def fix_percent(value: str):
     val = re.sub(r'%$', '', value)
     val = re.sub(r'%$', '', val)
     val = fix_currency(val)
@@ -93,12 +93,12 @@ class SuppressLineBlock:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if not self.sup_line_feed:
-            print("\n", end='')
+            # print("\n", end='')
             self.out.write('\n')
 
     def write(self, index, msg):
         self.out.write("{}|{}|".format(index, msg))
-        print("{}|{}|".format(index, msg), end='')
+        # print("{}|{}|".format(index, msg), end='')
         self.sup_line_feed = False
         self.data.append(msg)
 
@@ -119,8 +119,11 @@ class Page:
 
             elif type(x) == bs4.element.Tag:
                 x: bs4.element.Tag
+                # print(x.name, x.text)
                 if x.name == 'table':
                     self.parse_tbody(x)
+                elif x.name == 'thead':
+                    self.parse_thead(x)
                 elif x.name == 'tbody':
                     self.parse_tr(x)
                 elif x.name == 'tr':
@@ -153,7 +156,18 @@ class Page:
                 if x.name == 'tbody':
                     self.parse_tr(x)
 
+    def parse_thead(self, th):
+        for x in th.contents:
+            if type(x) == bs4.element.NavigableString:
+                continue
+
+            elif type(x) == bs4.element.Tag:
+                x: bs4.element.Tag
+                if x.name == 'tr':
+                    self.parse_tr(x)
+
     def parse_tr(self, tr):
+        data = []
         for x in tr.contents:
             if type(x) == bs4.element.NavigableString:
                 continue
@@ -162,6 +176,12 @@ class Page:
                 x: bs4.element.Tag
                 if x.name == 'tr':
                     self.parse_td(x)
+                elif x.name == 'th':
+                    text = x.text.strip()
+                    data.append(text)
+        if len(data) > 0:
+            # data is only used when there is "th" token (thead)
+            self.data.append(data)
 
     def parse_td(self, td):
         index = 0
@@ -174,24 +194,27 @@ class Page:
                     x: bs4.element.Tag
 
                     if x.name == 'td':
-                        spanned = self.parse_span(x)
-                        if len(spanned) == 0:
-                            text = x.text.strip()
-                            text = re.sub(r'\n', ' ', text)
+                        # TODO removing tag span?
+                        # spanned = self.parse_span(x)
+                        # if len(spanned) == 0:
+                        text = x.text.strip()
+                        text = re.sub(r'\n', ' ', text)
 
-                            if re.match(Page.re_numerical, text):
-                                try:
-                                    sup_line_block.write(index, fix_currency(text))
-                                except ValueError:
-                                    sup_line_block.write(index, text)
-
-                            elif re.match(Page.re_text, text):
+                        if re.match(Page.re_numerical, text):
+                            try:
+                                sup_line_block.write(index, fix_currency(text))
+                            except ValueError:
                                 sup_line_block.write(index, text)
 
-                            index += 1
+                        elif re.match(Page.re_text, text):
+                            sup_line_block.write(index, text)
                         else:
-                            for a in spanned:
-                                sup_line_block.write(index, a)
+                            sup_line_block.write(index, text)
+
+                        index += 1
+                        # else:
+                        #     for a in spanned:
+                        #         sup_line_block.write(index, a)
 
         # print(sup_line_block.data)
         self.data.append(sup_line_block.data)
