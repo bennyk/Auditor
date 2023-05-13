@@ -88,10 +88,7 @@ class Table:
                 Table.col_limit = last_limit+1
 
         self.tab = []
-        for i in range(1, max_row):
-            c0 = "{}{}".format(colnum_string(1), i)
-            if sheet_ranges[c0].value is None:
-                break
+        for i in range(1, sheet_ranges.max_row+1):
             r = []
             for j in range(1, Table.col_limit):
                 c1 = "{}{}".format(colnum_string(j), i)
@@ -101,7 +98,7 @@ class Table:
     def match_title(self, reg, none_is_optional=False):
         result = None
         for _ in self.tab:
-            if re.match(reg, _[0].strip()):
+            if _[0] is not None and re.match(reg, _[0].strip()):
                 result = _
                 break
         if not none_is_optional:
