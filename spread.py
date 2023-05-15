@@ -92,7 +92,12 @@ class Table:
             r = []
             for j in range(1, Table.col_limit):
                 c1 = "{}{}".format(colnum_string(j), i)
-                r.append(sheet_ranges[c1].value)
+                a = sheet_ranges[c1].value
+                if type(sheet_ranges[c1].value) is str:
+                    if re.match(r'[-–]|(?:\d+(?:(\.\d+))?)x$', a):
+                        # Match multiple such as n.nnx where n is a digit and x prefix is char
+                        a = float(a.replace('x', ''))
+                r.append(a)
             self.tab.append(r)
 
     def match_title(self, reg, none_is_optional=False):
