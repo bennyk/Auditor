@@ -13,6 +13,7 @@ import datetime
 from functools import partial
 import math
 from bcolors import bcolors, colour_print
+from spread import Table
 
 max_row = max_col = 99
 
@@ -124,56 +125,6 @@ def cagr(l: [float]) -> float:
 
 def zsum(a):
     return sum(list(map(lambda x: x if x is not None else 0, a)))
-
-
-class Table:
-    col_limit = 0
-
-    def __init__(self, sheet_ranges: worksheet):
-        self.date_range = []
-        last_limit = 0
-        try:
-            # configure spreadsheet based on number of cols.
-            for j in range(2, max_col):
-                c0 = "{}{}".format(colnum_string(j), 1)
-                if type(sheet_ranges[c0].value) is datetime.datetime:
-                    # type: datetime.datetime
-                    _ = sheet_ranges[c0].value
-                    self.date_range.append('{}/{}/{}'.format(_.month, _.day, _.year))
-                else:
-                    self.date_range.append(sheet_ranges[c0].value)
-
-                if re.match(r'LTM$', self.date_range[-1]):
-                    Table.col_limit = j + 1
-                    break
-                last_limit = j+1
-        except TypeError:
-            c0 = "{}{}".format(colnum_string(last_limit), 1)
-            if sheet_ranges[c0].value is None:
-                Table.col_limit = last_limit
-            else:
-                Table.col_limit = last_limit+1
-
-        self.tab = []
-        for i in range(1, max_row):
-            c0 = "{}{}".format(colnum_string(1), i)
-            if sheet_ranges[c0].value is None:
-                break
-            r = []
-            for j in range(1, Table.col_limit):
-                c1 = "{}{}".format(colnum_string(j), i)
-                r.append(sheet_ranges[c1].value)
-            self.tab.append(r)
-
-    def match_title(self, reg, none_is_optional=False):
-        result = None
-        for _ in self.tab:
-            if re.match(reg, _[0].strip()):
-                result = _
-                break
-        if not none_is_optional:
-            assert result is not None
-        return result
 
 
 class Spread:
@@ -500,7 +451,7 @@ class Spread:
             # TODO exception to EV over EBIT
             print("Warning: ev_over_ebit: Missing values tab.")
             return
-        ev_over_ebit = self.strip2(self.values.match_title('LTM Total Enterprise Value / EBIT$'))
+        ev_over_ebit = self.strip2(self.values.match_title(r'LTM\s+Total\s+Enterprise\s+Value\s*/\s*EBIT$'))
         avg_ev_over_ebit = average(ev_over_ebit)
         print("EV over EBIT average {:.2f} ratio for: {}".format(
             avg_ev_over_ebit,
@@ -632,7 +583,7 @@ class Spread:
             return
 
         price = self.values.match_title('Price$')
-        ev_over_ebit = self.strip2(self.values.match_title('LTM Total Enterprise Value / EBIT$'))
+        ev_over_ebit = self.strip2(self.values.match_title(r'LTM\s+Total\s+Enterprise\s+Value\s*/\s*EBIT$'))
         # TODO all div yields data?
         div_yield = None
         _ = self.values.match_title('LTM Dividend Yield$', none_is_optional=True)
