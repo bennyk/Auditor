@@ -18,6 +18,7 @@ class Spread:
         self.balance = None
         self.cashflow = None
         self.values = None
+        self.head = None
 
         prefix_index = 1
         self.start_prefix = prefix_index
@@ -25,6 +26,11 @@ class Spread:
         self.strip2 = partial(strip2, prefix=prefix_index)
 
         for index, name in enumerate(wb.sheetnames):
+            if name == 'Header':
+                ws = wb[name]
+                self.head = ws['A1'].value
+                continue
+
             tab = Table(wb[name])
             self.tabs.append(tab)
             if re.match(r'Income', name):
