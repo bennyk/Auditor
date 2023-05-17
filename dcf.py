@@ -119,8 +119,12 @@ class DCF(Spread):
         self.poss_ratio = None
         self.modes = modes
 
-    def wa_diluted_shares_out(self) -> float:
-        result = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
+    def wa_diluted_shares_out(self) -> list:
+        shares_out = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
+
+        # Find the first item in list that is not None, replace None to last item.
+        last_item = next((x for x in shares_out if x is not None))
+        result = list(map(lambda x: x if x is not None else last_item, shares_out))
         return result
 
     def fcf(self):
@@ -319,7 +323,9 @@ class Ticks:
         # https://blog.devgenius.io/how-to-easily-print-and-format-tables-in-python-18bbe2e59f5f
         # summarize to TV based on last FCF, avg FCF, multiple of NOPAT
 
-        a = list(map(lambda x: [x.tick, x.last_price], self.spreads))
+        # Set the first word as the header for our spreadsheet optionally.
+        a = list(map(lambda x: [x.head.split()[0] if x.head is not None else x.head,
+                                x.tick, x.last_price], self.spreads))
         for i, s in enumerate(self.spreads):
             for j in range(len(s.sum_pvtv)):
                 # extend the spread with sum_pvtv and poss ratio
@@ -329,7 +335,7 @@ class Ticks:
         # Sort it to the last column which is 'Possible' ratio
         entries = sorted(a, key=lambda x: x[len(a[0])-1])
         poss_header = 'Poss. x'
-        heads = ['Last price']
+        heads = ['Company', 'Tick', 'Last price']
         for i, m in enumerate(self.modes):
             # TODO mapping to the underlying string
             h = {Mode.Last_FCF: 'Last FCF',
@@ -341,7 +347,7 @@ class Ticks:
                        tablefmt='fancy_grid', stralign='center', numalign='center', floatfmt=".2f"))
 
         # generate Excel output
-        styles = ['Comma', 'Comma']
+        styles = ['Comma', 'Comma', 'Comma']
         for _ in self.modes:
             styles.extend(('Comma', 'Percent'))
         excel = ExcelOut(self.tickers, entries, styles=styles, headers=heads)
