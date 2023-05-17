@@ -324,7 +324,7 @@ class Ticks:
         # summarize to TV based on last FCF, avg FCF, multiple of NOPAT
 
         # Set the first word as the header for our spreadsheet optionally.
-        a = list(map(lambda x: [x.head.split()[0] if x.head is not None else x.head,
+        a = list(map(lambda x: [x.short_name() if x.head is not None else x.head,
                                 x.tick, x.last_price], self.spreads))
         for i, s in enumerate(self.spreads):
             for j in range(len(s.sum_pvtv)):

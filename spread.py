@@ -64,6 +64,10 @@ class Spread:
 
         self.half_len = int((self.end_year-self.start_year+1)/2)
 
+    def short_name(self):
+        a = re.sub(r'The', '', self.head)
+        return a.split()[0]
+
 
 class Table:
     col_limit = 0
