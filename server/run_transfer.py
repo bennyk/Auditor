@@ -82,7 +82,10 @@ class MainTable:
         time.sleep(5)
 
     def run(self):
-        clip = Clipboard()
+        elem = driver.find_element(By.XPATH, "//span[contains(@style, 'font-weight: bold')]")
+        # Parse the first line text only at the time being.
+        header = elem.text
+        clip = Clipboard(header)
 
         # max case for full span
         # offset = 15*start_offset/years# self.open('Financials', start_offset=0)
@@ -101,8 +104,11 @@ class MainTable:
 
 
 class Clipboard:
-    def __init__(self):
+    def __init__(self, header):
         self.wb = Workbook()
+        ws = self.wb.create_sheet('Header')
+        # set cell to header
+        ws.cell(row=1, column=1, value=header)
 
         # removing initial sheet
         ws = self.wb.active
