@@ -13,7 +13,7 @@ import datetime
 from functools import partial
 import math
 from bcolors import bcolors, colour_print
-from spread import Table
+from spread import Table, Spread
 from utils import *
 
 max_row = max_col = 99
@@ -28,62 +28,14 @@ RateVerbose = {RateType.above_avg: 'above',
                RateType.below_avg: 'below'}
 
 
-class Spread:
+class SpreadX(Spread):
     Percent_Denominator = 100
 
     def __init__(self, wb: Workbook, tick: str, prof: 'Prof', header: list):
-        self.tick = tick
+        super().__init__(wb, tick)
         self.profiler = prof
-        self.tabs = []
-        self.income = None
-        self.balance = None
-        self.cashflow = None
-        self.values = None
-
-        prefix_index = 1
-        self.start_prefix = prefix_index
-        self.strip = partial(strip, prefix=prefix_index)
-        self.strip2 = partial(strip2, prefix=prefix_index)
-
-        for index, name in enumerate(wb.sheetnames):
-            if name == 'Header':
-                # skip Header is good for the time being.
-                ws = wb[name]
-                header.append(ws['A1'].value)
-                continue
-
-            tab = Table(wb[name])
-            self.tabs.append(tab)
-            if re.match(r'Income', name):
-                self.income = tab
-                self.start_date = self.income.tab[0][1]
-                # -2 ignore year LTM
-                self.end_date = self.income.tab[0][-2]
-            elif re.match(r'Balance', name):
-                self.balance = tab
-            elif re.match(r'Cash', name):
-                self.cashflow = tab
-            elif re.match(r'Values', name):
-                self.values = tab
-            else:
-                # passing Ratios
-                pass
-
-        # 2: Skip int to str in start and end years which extract two digit, year number, in alphabets
-        if type(self.end_date) is datetime.datetime:
-            self.end_year = int(str(self.end_date.year)[2:])
-        else:
-            self.end_year = int(self.end_date.split('/')[-1])
-
-        if type(self.start_date) is datetime.datetime:
-            self.start_year = int(str(self.start_date.year)[2:])
-        else:
-            self.start_year = int(self.start_date.split('/')[-1])
-        print("Sampled from {} to {} in {} years".format(
-            self.start_date, self.end_date,
-            1+self.end_year-self.start_year))
-
-        self.half_len = int((self.end_year-self.start_year+1)/2)
+        # Append the returned super().head in Spread to the main header in the upstream inheritance.
+        header.append(self.head)
 
     def revenue(self):
         revs = self.strip(self.income.match_title('Total Revenues'))
@@ -113,7 +65,7 @@ class Spread:
         cagr_epu_ratio = cagr(epu_per_share)
         print("EPU from {:.2f} to {:.2f} at CAGR {:.2f}% for: {}".format(
             epu_per_share[0], epu_per_share[-1],
-            cagr_epu_ratio*Spread.Percent_Denominator, epu_per_share))
+            cagr_epu_ratio * SpreadX.Percent_Denominator, epu_per_share))
 
         if epu_per_share[-2] == epu_per_share[-1]:
             last_cagr_epu_ratio = cagr(epu_per_share[-3:-1])
@@ -281,9 +233,9 @@ class Spread:
             avg_roic_per,
             list(map(lambda x: round(x, 2), roic_per))
         ))
-        self.profiler._collect(avg_roic_per/Spread.Percent_Denominator, Tag.ROIC, ProfMethod.AveragePerc,
-                               val2=average(roic_per[self.half_len:])/Spread.Percent_Denominator,
-                               val3=roic_per[-1]/Spread.Percent_Denominator)
+        self.profiler._collect(avg_roic_per / SpreadX.Percent_Denominator, Tag.ROIC, ProfMethod.AveragePerc,
+                               val2=average(roic_per[self.half_len:]) / SpreadX.Percent_Denominator,
+                               val3=roic_per[-1] / SpreadX.Percent_Denominator)
 
     def net_debt_over_ebit(self):
         net_debt = self.strip(self.balance.match_title('Net Debt'))
@@ -349,9 +301,9 @@ class Spread:
         avg_op_margins,
             list(map(lambda x: round(x, 2), op_margins))
         ))
-        self.profiler._collect(avg_op_margins / Spread.Percent_Denominator, Tag.op_margin, ProfMethod.AveragePerc,
-                               val2=average(op_margins[self.half_len:])/Spread.Percent_Denominator,
-                               val3=op_margins[-1]/Spread.Percent_Denominator)
+        self.profiler._collect(avg_op_margins / SpreadX.Percent_Denominator, Tag.op_margin, ProfMethod.AveragePerc,
+                               val2=average(op_margins[self.half_len:]) / SpreadX.Percent_Denominator,
+                               val3=op_margins[-1] / SpreadX.Percent_Denominator)
 
     def ev_over_ebit(self):
         if self.values is None:
