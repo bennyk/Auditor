@@ -6,7 +6,7 @@
 import os.path
 
 from openpyxl import load_workbook
-from tikr_terminal import ProfManager, Spread
+from tikr_terminal import ProfManager, SpreadX
 from bcolors import bcolors, colour_print
 import tradingview
 
@@ -14,6 +14,7 @@ import tradingview
 def main():
     prof = ProfManager()
     tickers = tradingview.TradingView().fetch()
+    # tickers = []
 
     path = "spreads"
     for c in tickers:
@@ -25,7 +26,7 @@ def main():
         print('Ticker {}'.format(c))
         wb = load_workbook(path+'/' + c + '.xlsx')
         pf = prof.create_folder(c)
-        t = Spread(wb, c, pf)
+        t = SpreadX(wb, c, pf, pf.long_name_ref)
         t.revenue()
         t.epu()
         t.owner_yield()
