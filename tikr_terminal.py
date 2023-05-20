@@ -130,7 +130,7 @@ def zsum(a):
 class Spread:
     Percent_Denominator = 100
 
-    def __init__(self, wb: Workbook, tick: str, prof: 'Prof'):
+    def __init__(self, wb: Workbook, tick: str, prof: 'Prof', header: list):
         self.tick = tick
         self.profiler = prof
         self.tabs = []
@@ -145,6 +145,12 @@ class Spread:
         self.strip2 = partial(strip2, prefix=prefix_index)
 
         for index, name in enumerate(wb.sheetnames):
+            if name == 'Header':
+                # skip Header is good for the time being.
+                ws = wb[name]
+                header.append(ws['A1'].value)
+                continue
+
             tab = Table(wb[name])
             self.tabs.append(tab)
             if re.match(r'Income', name):
@@ -671,6 +677,7 @@ class Tag(Enum):
 class Prof:
     def __init__(self, name):
         self.name = name
+        self.long_name_ref = []
         self.d = OrderedDict()
         self.last_price = None
 
@@ -939,7 +946,7 @@ class ProfManager:
 
 class WorkWrap:
 
-    start_col = 2
+    start_col = 3
     row_margin = 1
 
     # TODO differential data, hmmm...
@@ -1004,7 +1011,7 @@ class WorkWrap:
         self.end_row_index = len(self.companies) + self.start_row_index+1
 
         self.j = WorkWrap.row_margin + 1
-        self.i = 2
+        self.i = WorkWrap.start_col
 
         self.init_sheet()
 
@@ -1017,6 +1024,11 @@ class WorkWrap:
         cell.value = '5 years'
         cell = self.sheet.cell(row=1, column=WorkWrap.start_col+2*len(Tag))
         cell.value = 'Current year'
+
+        cell = self.sheet.cell(row=2, column=1)
+        cell.value = 'Tick'
+        cell = self.sheet.cell(row=2, column=2)
+        cell.value = 'Company'
 
         Tag_to_long = {
             Tag.rev_per_share: 'Sales per share',
@@ -1057,6 +1069,11 @@ class WorkWrap:
             self.i = 1
             cell = self.sheet.cell(row=self.j, column=self.i)
             cell.value = c.name
+
+            self.i += 1
+            cell = self.sheet.cell(row=self.j, column=self.i)
+            if type(c.long_name_ref) is list:
+                cell.value = c.long_name_ref[0]
 
             self.i += 1
             for ri in range(1, 4):
