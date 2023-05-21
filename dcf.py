@@ -119,14 +119,6 @@ class DCF(Spread):
         self.poss_ratio = None
         self.modes = modes
 
-    def wa_diluted_shares_out(self) -> list:
-        shares_out = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
-
-        # Find the first item in list that is not None, replace None to last item.
-        last_item = next((x for x in shares_out if x is not None))
-        result = list(map(lambda x: x if x is not None else last_item, shares_out))
-        return result
-
     def fcf(self):
         # also known as Levered FCF
         earning_not_strip = self.cashflow.match_title('Free Cash Flow$', none_is_optional=True)

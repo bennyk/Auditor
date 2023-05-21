@@ -473,18 +473,6 @@ class SpreadX(Spread):
         # AFFO commented diff
         # 'price_over_affo': price_over_affo})
 
-    def share_out_filing(self) -> [float]:
-        # "Total Shares Out. Filing Date" is provided in Balance Sheet which computed as fully year
-        # or last trailing year I think.
-        # TODO Currently it is being replace by "Weighted Average Diluted Shares Outstanding"
-        x = self.balance.match_title('Total Shares Out\.')
-        result = list(filter(None, reversed(x[self.start_prefix:])))[0]
-        return result
-
-    def wa_diluted_shares_out(self) -> [float]:
-        result = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
-        return result
-
 
 class ProfMethod(Enum):
     CAGR = 1

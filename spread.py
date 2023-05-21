@@ -68,6 +68,22 @@ class Spread:
         a = re.sub(r'The', '', self.head)
         return a.split()[0]
 
+    def share_out_filing(self) -> [float]:
+        # "Total Shares Out. Filing Date" is provided in Balance Sheet which computed as fully year
+        # or last trailing year I think.
+        # TODO Currently it is being replace by "Weighted Average Diluted Shares Outstanding"
+        x = self.balance.match_title('Total Shares Out\.')
+        result = list(filter(None, reversed(x[self.start_prefix:])))[0]
+        return result
+
+    def wa_diluted_shares_out(self) -> [float]:
+        shares_out = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
+
+        # Find the first item in list that is not None, replace None to last item.
+        last_item = next((x for x in shares_out if x is not None))
+        result = list(map(lambda x: x if x is not None else last_item, shares_out))
+        return result
+
 
 class Table:
     col_limit = 0
