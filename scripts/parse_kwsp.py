@@ -11,10 +11,14 @@ class Work:
         self.result = {}
         self.start_column = 1
         self.start_offset = self.start_column+1
+        self.start_year = 2013
         self.wb = Workbook()
 
+        # End year will be updated at complete parsing
+        self.end_year = None
+
     def start(self):
-        start_date = datetime(2013, 1, 1)
+        start_date = datetime(self.start_year, 1, 1)
         # start_date = datetime(1960, 1, 1)
         current_date = datetime.now()
 
@@ -40,6 +44,7 @@ class Work:
 
             date_range.append(date)
             date += timedelta(days=1)
+        self.end_year = date_range[-1].year
 
 
 class HistoricalChart(Work):
@@ -112,19 +117,21 @@ class HistoricalChart(Work):
         title = d_rate[-1][0].split()[0]
         start_year = int(title)
         print("starting year", start_year)
-        # print("end year", d_rate[0][0])
+        print("end year", d_rate[0][0])
 
         # strip out the headers including EPF to Shariah owners.
         _ = list(map(lambda x: x[2], d_rate))
         _.reverse()
         print("div rate", np.around(_, decimals=4))
-        print("num of years", len(_))
+        num_years = len(_)
+        print("num of years", num_years)
         s = 1.0
         for i in range(len(_)):
             s += _[i]
             yield start_year+i, _[i]
-        print("cagr {:.2f}%".format(cagr([1., s]) * 100))
-        print("average {:.2f}%".format(average(_) * 100))
+
+        price_return = HistoricalChart.cagr_price_return(s, 1., num_years)
+        print("cagr {:.2f}%".format(price_return*100))
         print("number of multiple {:.1f}x".format(s-1))
         print()
 
@@ -139,6 +146,7 @@ class HistoricalChart(Work):
             Close = 4
             lines = file.readlines()
             init_open = float(lines[1:][-1].strip().split(', ')[Open])
+            last_closed = None
             for line in reversed(lines[1:]):
                 a = line.strip().split(', ')
                 # print(a)
@@ -151,8 +159,13 @@ class HistoricalChart(Work):
                         cell.value = float(a[Close]) / init_open - 1
                         # cell.style = 'Percent'
                         cell.number_format = '0.00%'
+                        last_closed = float(a[Close])
                 except ValueError:
                     pass
+            price_return = HistoricalChart.cagr_price_return(last_closed, init_open,
+                                                             self.end_year-self.start_year)
+            print("cagr {:.2f}%".format(price_return * 100))
+            print("number of multiple {:.1f}x".format(last_closed/init_open))
 
         for i, fname in enumerate([
             'wsj-klci-historical.csv',
@@ -166,10 +179,17 @@ class HistoricalChart(Work):
         ], 2):
             path = "data/{}".format(fname)
             with open(path) as f:
+                print(fname)
                 compute_historical(f, i)
+                print()
 
     def save(self):
         self.wb.save('parsed_kwsp_div.xlsx')
+
+    @staticmethod
+    def cagr_price_return(last_closed, init_open, num_years):
+        price_return = (last_closed/init_open-1.)
+        return (1+price_return)**(1/num_years)-1.
 
 
 if __name__ == '__main__':
