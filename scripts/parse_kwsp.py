@@ -12,6 +12,8 @@ class Work:
         self.start_column = 1
         self.start_offset = self.start_column+1
         self.start_year = 2013
+        # TODO start year
+        # self.start_year = 1960
         self.wb = Workbook()
 
         # End year will be updated at complete parsing
@@ -19,32 +21,36 @@ class Work:
 
     def start(self):
         start_date = datetime(self.start_year, 1, 1)
-        # start_date = datetime(1960, 1, 1)
-        current_date = datetime.now()
-
-        date_range = []
         date = start_date
-
-        start_ordinal = date.toordinal()
         sheet = self.wb.active
         sheet.cell(row=1, column=self.start_column, value='Date')
         sheet.cell(row=1, column=self.start_offset, value='KWSP')
+        _ = self.fill(date)
+        self.end_year = _.year
+
+        sheet.cell(row=1, column=self.start_offset+1, value='MY Inflation')
+        self.fill(date, add_col=1)
+
+    def fill(self, date, add_col=0):
+        start_ordinal = date.toordinal()
+        current_date = datetime.now()
+        sheet = self.wb.active
         while date <= current_date:
             i = date.toordinal() - start_ordinal + 2
-            cell = sheet.cell(row=i, column=self.start_column)
-            cell.value = date
-            cell.number_format = 'DD/MM/YY'
-            self.result[date.toordinal()] = {'cell': cell}
+            if add_col == 0:
+                cell = sheet.cell(row=i, column=self.start_column)
+                cell.value = date
+                cell.number_format = 'DD/MM/YY'
+                self.result[date.toordinal()] = {'cell': cell}
 
             # inserting initial percent
-            cell = sheet.cell(row=i, column=self.start_offset)
+            offset = self.start_offset+add_col
+            cell = sheet.cell(row=i, column=offset)
             if i > 2:
-                cell.value = "={}{}".format(colnum_string(self.start_offset), i-1)
+                cell.value = "={}{}".format(colnum_string(offset), i-1)
                 cell.number_format = '0.00%'
-
-            date_range.append(date)
             date += timedelta(days=1)
-        self.end_year = date_range[-1].year
+        return date
 
 
 class HistoricalChart(Work):
@@ -55,6 +61,7 @@ class HistoricalChart(Work):
     def start(self):
         super().start()
         self.parse_kwsp()
+        self.parse_inflation()
         self.parse_wsj()
         self.save()
 
@@ -99,6 +106,7 @@ class HistoricalChart(Work):
         striped_div_rate = self.div_rate[2:]
         # cal_div_rate(striped_div_rate)
         s = 1.0
+        # TODO full dividend data
         # for x in self.cal_div_rate(striped_div_rate):
         for x in self.cal_div_rate(striped_div_rate[:10]):
             # Dividend usually announce in March averagely.
@@ -108,7 +116,7 @@ class HistoricalChart(Work):
             s += float(x[1])
             cell.value = s-1
             cell.number_format = '0.00%'
-            print(x)
+            print(s, x)
 
     @staticmethod
     def cal_div_rate(d_rate):
@@ -135,11 +143,51 @@ class HistoricalChart(Work):
         print("number of multiple {:.1f}x".format(s-1))
         print()
 
+    def parse_inflation(self):
+        def compute_historical(file, index):
+            sheet = self.wb.active
+
+            Open = 1
+            Close = 1
+            lines = file.readlines()
+            init_open = None
+            last_closed = .0
+            for line in lines[1:]:
+                a = line.strip().split(',')
+                # print(a)
+                parsed_date = datetime.strptime(a[0], "%Y-%m-%d")
+                if parsed_date.toordinal() in self.result:
+                    c = self.result[parsed_date.toordinal()]['cell']
+                    # type: worksheet.Worksheet
+                    cell = sheet.cell(row=c.row, column=c.column + index)
+                    # TODO Inflation-adjusted return = (1 + Stock Return) / (1 + Inflation) - 1
+                    if init_open is None:
+                        init_open = float(a[Open])/100
+                    current_close = float(a[Close])/100
+                    last_closed += current_close
+                    cell.value = last_closed
+                    # cell.style = 'Percent'
+                    cell.number_format = '0.00%'
+                    print(parsed_date, current_close, last_closed)
+                    pass
+            price_return = HistoricalChart.cagr_price_return(last_closed, init_open,
+                                                             self.end_year-self.start_year)
+            print("cagr {:.2f}%".format(price_return * 100))
+            print("number of multiple {:.1f}x".format(last_closed/init_open))
+
+        fname = "malaysia inflation max FPCPITOTLZGMYS.csv"
+        path = "data/{}".format(fname)
+        with open(path, 'r') as f:
+            print(fname)
+            compute_historical(f, 2)
+            print()
+
     def parse_wsj(self):
         def compute_historical(file, index):
             sheet = self.wb.active
             name = file.name.split('.csv')[0].split('-')[1].upper()
-            cell = sheet.cell(row=1, column=index+1)
+            add_col = 1
+            cell = sheet.cell(row=1, column=add_col+index+1)
             cell.value = name
 
             Open = 1
@@ -155,7 +203,7 @@ class HistoricalChart(Work):
                     if parsed_date.toordinal() in self.result:
                         c = self.result[parsed_date.toordinal()]['cell']
                         # type: worksheet.Worksheet
-                        cell = sheet.cell(row=c.row, column=c.column + index)
+                        cell = sheet.cell(row=c.row, column=c.column+index+add_col)
                         cell.value = float(a[Close]) / init_open - 1
                         # cell.style = 'Percent'
                         cell.number_format = '0.00%'
@@ -176,6 +224,9 @@ class HistoricalChart(Work):
             'wsj-brk.b-historical.csv',
             'wsj-soxx-historical.csv',
             'wsj-aapl-historical.csv',
+            'wsj-tsla-historical.csv',
+            'wsj-nvda-historical.csv',
+            'wsj-intc-historical.csv',
         ], 2):
             path = "data/{}".format(fname)
             with open(path) as f:
