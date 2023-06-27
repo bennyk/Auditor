@@ -2,22 +2,25 @@ from datetime import datetime, timedelta
 from openpyxl.workbook import Workbook
 from openpyxl.worksheet import worksheet
 import numpy as np
+from enum import Enum
 
 from utils import *
 
+class KWSP_Mode(Enum):
+    Current = 2
+    Long = 1
+
 
 class Work:
-    def __init__(self):
+    def __init__(self, mode):
         self.result = {}
         self.start_column = 1
         self.start_offset = self.start_column+1
-        self.start_year = 2013
-        # TODO start year
-        # self.start_year = 1960
         self.wb = Workbook()
 
         # End year will be updated at complete parsing
         self.end_year = None
+        self.start_year = {KWSP_Mode.Current: 2013, KWSP_Mode.Long: 1960}[mode]
 
     def start(self):
         start_date = datetime(self.start_year, 1, 1)
@@ -54,15 +57,19 @@ class Work:
 
 
 class HistoricalChart(Work):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, mode):
+        super().__init__(mode)
+        self.mode = mode
         self.div_rate = []
+        self.filepath = {KWSP_Mode.Current: 'parsed_kwsp_div',
+                         KWSP_Mode.Long: 'parsed_kwsp_div_long'}[mode] + '.xlsx'
 
     def start(self):
         super().start()
         self.parse_kwsp()
         self.parse_inflation()
-        self.parse_wsj()
+        if self.mode == KWSP_Mode.Current:
+            self.parse_wsj()
         self.save()
 
     def parse_kwsp(self):
@@ -104,11 +111,10 @@ class HistoricalChart(Work):
 
         sheet = self.wb.active
         striped_div_rate = self.div_rate[2:]
-        # cal_div_rate(striped_div_rate)
         s = 1.0
-        # TODO full dividend data
-        # for x in self.cal_div_rate(striped_div_rate):
-        for x in self.cal_div_rate(striped_div_rate[:10]):
+        div_span = {KWSP_Mode.Current: striped_div_rate[:10],
+                    KWSP_Mode.Long: striped_div_rate}[self.mode]
+        for x in self.cal_div_rate(div_span):
             # Dividend usually announce in March averagely.
             c = self.result[datetime(x[0], 3, 1).toordinal()]['cell']
             # cell = sheet.cell(row=c.row, column=c.column+offset)
@@ -235,7 +241,7 @@ class HistoricalChart(Work):
                 print()
 
     def save(self):
-        self.wb.save('parsed_kwsp_div.xlsx')
+        self.wb.save(self.filepath)
 
     @staticmethod
     def cagr_price_return(last_closed, init_open, num_years):
@@ -244,5 +250,6 @@ class HistoricalChart(Work):
 
 
 if __name__ == '__main__':
-    work = HistoricalChart()
-    work.start()
+    for m in [KWSP_Mode.Long, KWSP_Mode.Current]:
+        work = HistoricalChart(m)
+        work.start()
