@@ -42,7 +42,7 @@ class MainTable:
     def __init__(self, ticker):
         self.ticker = ticker
 
-    def open(self, title, start_offset, period_offset):
+    def open(self, title, start_offset=None, period_offset=None):
         print("waiting to load {title}".format(title=title))
         time.sleep(5)
 
@@ -50,36 +50,40 @@ class MainTable:
         # TODO 5 secs sleep might not work in Valuation spread.
         time.sleep(8)
 
-        print("sliding year range to max years available")
-        driver.find_element(By.CLASS_NAME, "v-slider__thumb")
-        print("found slider thumb")
-        move = ActionChains(driver)
+        if start_offset is not None:
+            assert period_offset is not None
+            print("sliding year range to max years available")
+            driver.find_element(By.CLASS_NAME, "v-slider__thumb")
+            print("found slider thumb")
+            move = ActionChains(driver)
 
-        # https://stackoverflow.com/questions/40485157/how-to-move-range-input-using-selenium-in-python
-        key = "aria-valuemax"
-        elem = driver.find_element(By.CSS_SELECTOR, "div[{}]".format(key))
-        avail_period = int(elem.get_dom_attribute('{}'.format(key)))
+            # https://stackoverflow.com/questions/40485157/how-to-move-range-input-using-selenium-in-python
+            key = "aria-valuemax"
+            elem = driver.find_element(By.CSS_SELECTOR, "div[{}]".format(key))
+            avail_period = int(elem.get_dom_attribute('{}'.format(key)))
 
-        offset = period_offset*start_offset/avail_period
+            offset = period_offset*start_offset/avail_period
 
-        print("period_offset {} start_offset {} avail_period {} offset {:.2f}".format(
-            period_offset, start_offset, avail_period, offset))
-        try:
-            move.click_and_hold(elem).move_by_offset(offset, 0).release().perform()
-        except MoveTargetOutOfBoundsException:
-            # TODO relative offset position
-            # fpgroup
-            # period_offset 58 start_offset -1050 avail_period 36 offset -1691.67
-            # period_offset 50 start_offset -1050 avail_period 36 offset -1458.33
-            # gtronic
-            # period_offset 58 start_offset -1050 avail_period 69 offset -882.61
-            colour_print("move target out of bound exception. Trying to retract the offset", bcolors.WARNING)
-            fixed = 50
-            x = fixed*start_offset/avail_period
             print("period_offset {} start_offset {} avail_period {} offset {:.2f}".format(
-                fixed, start_offset, avail_period, x))
-            move.click_and_hold(elem).move_by_offset(x, 0).release().perform()
-        time.sleep(5)
+                period_offset, start_offset, avail_period, offset))
+            try:
+                move.click_and_hold(elem).move_by_offset(offset, 0).release().perform()
+            except MoveTargetOutOfBoundsException:
+                # TODO relative offset position
+                # fpgroup
+                # period_offset 58 start_offset -1050 avail_period 36 offset -1691.67
+                # period_offset 50 start_offset -1050 avail_period 36 offset -1458.33
+                # gtronic
+                # period_offset 58 start_offset -1050 avail_period 69 offset -882.61
+                colour_print("move target out of bound exception. Trying to retract the offset", bcolors.WARNING)
+                fixed = 50
+                x = fixed*start_offset/avail_period
+                print("period_offset {} start_offset {} avail_period {} offset {:.2f}".format(
+                    fixed, start_offset, avail_period, x))
+                move.click_and_hold(elem).move_by_offset(x, 0).release().perform()
+            time.sleep(5)
+        else:
+            print("Skip start offset")
 
     def run(self):
         elem = driver.find_element(By.XPATH, "//span[contains(@style, 'font-weight: bold')]")
@@ -98,6 +102,9 @@ class MainTable:
         # No change to start offset. Period offset based on 10 years in quarterly period
         self.open('Valuation', start_offset=-1050, period_offset=58)
         clip.run(selection="Values")
+
+        self.open('Estimates')
+        clip.run(selection="Estimates")
 
         clip.save(self.ticker)
         print("Saved to {}".format(self.ticker))
