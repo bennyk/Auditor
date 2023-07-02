@@ -18,6 +18,7 @@ class Spread:
         self.balance = None
         self.cashflow = None
         self.values = None
+        self.estimates = None
         self.head = None
 
         prefix_index = 1
@@ -44,6 +45,10 @@ class Spread:
                 self.cashflow = tab
             elif re.match(r'Values', name):
                 self.values = tab
+            elif re.match(r'Estimates', name):
+                self.estimates = tab
+                # TODO Removing two expected entry and CAGR data not available for TIKR Pro
+                tab.remove(-3)
             else:
                 # passing Ratios
                 pass
@@ -52,12 +57,14 @@ class Spread:
         if type(self.end_date) is datetime.datetime:
             self.end_year = int(str(self.end_date.year)[2:])
         else:
-            self.end_year = int(self.end_date.split('/')[-1])
+            _ = self.end_date.split('/')[-1]
+            self.end_year = int(_.strip('EA'))
 
         if type(self.start_date) is datetime.datetime:
             self.start_year = int(str(self.start_date.year)[2:])
         else:
-            self.start_year = int(self.start_date.split('/')[-1])
+            _ = self.start_date.split('/')[-1]
+            self.start_year = int(_.strip('EA'))
         print("Sampled from {} to {} in {} years".format(
             self.start_date, self.end_date,
             1+self.end_year-self.start_year))
@@ -135,3 +142,6 @@ class Table:
         if not none_is_optional:
             assert result is not None
         return result
+
+    def remove(self, offset):
+        self.tab = [row[:offset] for row in self.tab]

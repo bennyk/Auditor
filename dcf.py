@@ -119,15 +119,18 @@ class DCF(Spread):
         self.poss_ratio = None
         self.modes = modes
 
-    def fcf(self):
-        # also known as Levered FCF
-        earning_not_strip = self.cashflow.match_title('Free Cash Flow$', none_is_optional=True)
+    def fcf(self, estimates=False):
+        cashflow = self.cashflow
+        if estimates:
+            cashflow = self.estimates
+
+        earning_not_strip = cashflow.match_title('Free Cash Flow$', none_is_optional=True)
         if earning_not_strip is not None:
             earning = self.strip(earning_not_strip)
         else:
-            cfo = self.strip(self.cashflow.match_title('Cash from Operations$'))
-            opt_acq_real_assets = self.cashflow.match_title('Acquisition of Real Estate Assets$',
-                                                            none_is_optional=True)
+            cfo = self.strip(cashflow.match_title('Cash from Operations$'))
+            opt_acq_real_assets = cashflow.match_title('Acquisition of Real Estate Assets$',
+                                                       none_is_optional=True)
             earning = cfo
             if opt_acq_real_assets is not None:
                 acq_real_assets = self.strip(opt_acq_real_assets)
@@ -165,10 +168,11 @@ class DCF(Spread):
         return average(kwargs['fcf'][self.half_len:]) * (1+self.tgr) * self.term_dr
 
     def compute_fcf(self):
+        estimates_flag = False
         print(self.tick)
         self.last_price = self.values.match_title('Price$')[-1]
         print("last price", self.last_price)
-        fcf = self.fcf()
+        fcf = self.fcf(estimates=estimates_flag)
         nper = len(fcf)
 
         # https://www.investopedia.com/terms/d/dcf.asp
@@ -191,12 +195,17 @@ class DCF(Spread):
         pv_ov_pvtv = []
         self.poss_ratio = []
 
-        # TODO mapping to the underlying implementation
+        ufcf_5x = bind(UFCF(self), tv_multiple_ufcf_5x)
+        ufcf_8x = bind(UFCF(self), tv_multiple_ufcf_8x)
+        if estimates_flag:
+            ufcf_5x = bind(UFCF_Estimates(self), tv_multiple_ufcf_5x)
+            ufcf_8x = bind(UFCF_Estimates(self), tv_multiple_ufcf_8x)
+
         calc_fcf = list(map(lambda x: {
             Mode.Last_FCF: self.tv_last_fcf,
             Mode.Avg_FCF: self.tv_avg_fcf,
-            Mode.UFCF_5x: bind(UFCF(self), tv_multiple_ufcf_5x),
-            Mode.UFCF_8x: bind(UFCF(self), tv_multiple_ufcf_8x),
+            Mode.UFCF_5x: ufcf_5x,
+            Mode.UFCF_8x: ufcf_8x,
         }[x], self.modes))
         for m in calc_fcf:
             _tv = m(fcf=fcf)
@@ -259,6 +268,27 @@ class UFCF:
             debt_repaid = src.strip(src.cashflow.match_title('Total Debt Repaid$'))
             # earning = list_add_list(earning, debt_issued)
             ufcf = list_add_list(ufcf, debt_repaid)
+
+        # ebit = list_add_list(ebit, ie)
+        self.ufcf_per_share = list_over_list(
+            ufcf[src.half_len:], src.wa_diluted_shares_out()[src.half_len:])
+        # ufcf, src.wa_diluted_shares_out())
+        # TODO option for half_len?
+        self.tgr = src.tgr
+        self.term_dr = src.term_dr
+
+
+class UFCF_Estimates:
+    def __init__(self, src: DCF):
+        ufcf = src.strip(src.estimates.match_title(r'EBITDA$'))
+        ebt = src.strip(src.estimates.match_title(r'EBT \(GAAP\) Actual$'))
+        etr = src.strip(src.estimates.match_title(r'Effective Tax Rate \(%\)$'))
+        etr = list_over_list(etr, [-100] * len(ufcf))
+        tax = list_multiply_list(ebt, etr)
+        ufcf = list_add_list(ufcf, tax)
+
+        capex = src.strip(src.estimates.match_title('Capital Expenditure$'))
+        ufcf = list_add_list(ufcf, capex)
 
         # ebit = list_add_list(ebit, ie)
         self.ufcf_per_share = list_over_list(
