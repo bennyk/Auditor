@@ -1,4 +1,6 @@
 from selenium import webdriver
+from chromedriver_py import binary_path
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver import ActionChains
@@ -242,7 +244,8 @@ def run_main():
     global driver
 
     # bootstrap functions
-    driver = webdriver.Chrome()
+    options = webdriver.ChromeOptions()
+    driver = webdriver.Chrome(service=Service(executable_path=binary_path), options=options)
     session_id = driver.session_id
     executor_url = driver.command_executor._url
     # driver.get("https://app.tikr.com/stock/estimates?ref=iwd7tf")
@@ -255,7 +258,7 @@ def run_main():
     driver.maximize_window()
 
     # TODO input ID?
-    input_id = 'input-11'
+    input_id = 'input-13'
     elem = driver.find_element(By.ID, input_id)
     with open('meow.txt') as f:
         if elem is not None:
@@ -263,7 +266,7 @@ def run_main():
             elem.send_keys(f.readline())
             elem.send_keys(Keys.RETURN)
 
-        elem = driver.find_element(By.ID, "input-14")
+        elem = driver.find_element(By.ID, "input-16")
         if elem is not None:
             elem.send_keys(f.readline())
             elem.send_keys(Keys.RETURN)
