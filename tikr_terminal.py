@@ -89,7 +89,20 @@ class SpreadX(Spread):
             if opt_acq_real_assets is not None:
                 acq_real_assets = self.strip(opt_acq_real_assets)
                 earning = list_add_list(cfo, acq_real_assets)
-        earning_yield = list_over_list(earning, self.wa_diluted_shares_out())
+        earnings_per_share = list_over_list(earning, self.wa_diluted_shares_out())
+        tev = self.strip(self.values.match_title('Total Enterprise Value'))
+        i = 0
+        TEV = []
+        while i < len(tev):
+            TEV.append(average(tev[i:i+4]))
+            # print(a, i, j)
+            i += 4
+
+        # Trim the excess in TEV length over Diluted shares outstanding.
+        TEV_per_share = list_over_list(TEV[len(TEV)-len(self.wa_diluted_shares_out()):],
+                                       self.wa_diluted_shares_out())
+
+        earning_yield = list_over_list(earnings_per_share, TEV_per_share)
         avg_yield = statistics.median(earning_yield)
         print("Earning yield from {:.2f} to {:.2f} at average {:.2f}% for: {}".format(
             earning_yield[0], earning_yield[-1],
@@ -243,8 +256,12 @@ class SpreadX(Spread):
         # Compute EBIT as Net income - Tax income expense - Interest expense.
         # Tax expense and Interest expense values from TIKR terminal have been negated.
         net_income = self.strip(self.income.match_title('Net Income$'))
-        tax_expense = self.strip(self.income.match_title('Income Tax Expense$'))
-        ebit = list_minus_list(net_income, tax_expense)
+        tax_not_strip = self.income.match_title('Income Tax Expense', none_is_optional=True)
+        if tax_not_strip is not None:
+            tax_expense = self.strip(tax_not_strip)
+            ebit = list_minus_list(net_income, tax_expense)
+        else:
+            ebit = net_income
         interest_expense = self.strip(self.income.match_title('Interest Expense$'))
         ebit = list_minus_list(ebit, interest_expense)
 
@@ -261,12 +278,16 @@ class SpreadX(Spread):
                                val2=average(net_debt_over_ebit[self.half_len:]),
                                val3=net_debt_over_ebit[-1])
 
-        ebitda = self.strip(self.income.match_title('EBITDA$'))
-        net_debt_over_ebitda = list_over_list(net_debt, ebitda)
-        avg_net_debt_over_ebitda = average(net_debt_over_ebitda)
-        colour_print("EBITDA: Net debt over EBITDA average {:.2f} years for: {}".format(
-            avg_net_debt_over_ebitda,
-            list(map(lambda x: round(x, 2), net_debt_over_ebitda))), bcolors.WARNING)
+        # TODO Some Malaysian companies in TIKR does not provide EBITDA
+        # try:
+        #     ebitda = self.strip(self.income.match_title('EBITDA$'))
+        #     net_debt_over_ebitda = list_over_list(net_debt, ebitda)
+        #     avg_net_debt_over_ebitda = average(net_debt_over_ebitda)
+        #     colour_print("EBITDA: Net debt over EBITDA average {:.2f} years for: {}".format(
+        #         avg_net_debt_over_ebitda,
+        #         list(map(lambda x: round(x, 2), net_debt_over_ebitda))), bcolors.WARNING)
+        # except TypeError:
+        #     colour_print("EBITDA return None", bcolors.WARNING)
 
     def net_debt_over_fcf(self):
         # TODO net_debt_over_fcf
@@ -454,7 +475,7 @@ class SpreadX(Spread):
         op_income = self.income.match_title('Operating Income')
         net_profit = self.income.match_title('Net Income')
 
-        dpu = self.income.match_title('Dividends Per Share', none_is_optional=True)
+        dpu = self.income.match_title('Dividends Per Share', none_is_optional=True, flags=re.IGNORECASE)
         last_dpu = 0 if dpu is None or dpu[-1] is None else dpu[-1]
 
         # AFFO commented diff
@@ -559,7 +580,7 @@ class ProfManager:
     # AFFO and Tangible commented diffs
     Rate = {Tag.rev_per_share: {'high': .1, 'mid': .05},
             Tag.epu: {'high': .2, 'mid': .1},
-            Tag.owner_yield: {'high': 3., 'mid': 1.},
+            Tag.owner_yield: {'high': .08, 'mid': .03},
             # Tag.affo_per_share: {'high': 4., 'mid': 2.},
             # Tag.nav_per_share: {'high': .08, 'mid': .05},
             # Tangible commented diff
@@ -874,7 +895,7 @@ class WorkWrap:
         Tag_to_long = {
             Tag.rev_per_share: 'Sales per share',
             Tag.epu: 'EPS',
-            Tag.owner_yield: 'FCF per share',
+            Tag.owner_yield: 'FCF yield',
             Tag.ROIC: 'ROIC',
             Tag.net_debt_over_ebit: 'Net debt /EBIT',
             Tag.ev_over_ebit: 'EV/EBIT',
@@ -940,7 +961,7 @@ class WorkWrap:
             # Last 10 years metric
             {'val': com.prof[Tag.rev_per_share]['val{}'.format(range_index)], 'rule': gen_rule},
             {'val': com.prof[Tag.epu]['val{}'.format(range_index)], 'rule': gen_rule},
-            {'val': com.prof[Tag.owner_yield]['val{}'.format(range_index)], 'number': 'ratio', 'rule': gen_rule},
+            {'val': com.prof[Tag.owner_yield]['val{}'.format(range_index)], 'rule': gen_rule},
             # AFFO and Tangible commented diffs
             # {'val': c.prof[Tag.affo_per_share]['val{}'.format(_)], 'rule': gen_rule},
             # {'val': c.prof[Tag.tangible_per_share]['val{}'.format(_)], 'rule': gen_rule},
