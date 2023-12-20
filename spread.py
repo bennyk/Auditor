@@ -133,10 +133,10 @@ class Table:
                 r.append(a)
             self.tab.append(r)
 
-    def match_title(self, reg, none_is_optional=False):
+    def match_title(self, reg, none_is_optional=False, flags=0):
         result = None
         for _ in self.tab:
-            if _[0] is not None and re.match(reg, _[0].strip()):
+            if _[0] is not None and re.match(reg, _[0].strip(), flags):
                 result = _
                 break
         if not none_is_optional:
