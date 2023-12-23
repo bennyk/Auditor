@@ -66,6 +66,8 @@ def list_abs(x):
 def list_one(x, l):
     return [1.] * l
 
+def list_negate(x):
+    return list(map(lambda n1: -n1, x))
 
 def cagr(l: [float]) -> float:
     # standard CAGR formula:
