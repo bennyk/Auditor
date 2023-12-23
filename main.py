@@ -13,8 +13,8 @@ import tradingview
 
 def main():
     prof = ProfManager()
-    tickers = tradingview.TradingView().fetch()
-    # tickers = []
+    # tickers = tradingview.TradingView().fetch()
+    tickers = []
 
     path = "spreads"
     for c in tickers:
@@ -29,6 +29,7 @@ def main():
         t = SpreadX(wb, c, pf, pf.long_name_ref)
         t.revenue()
         t.epu()
+        t.op_yield()
         t.owner_yield()
         # t.cfo()
         # AFFO commented diff
