@@ -76,6 +76,30 @@ class SpreadX(Spread):
                                val2=cagr(epu_per_share[self.half_len:]),
                                val3=last_cagr_epu_ratio)
 
+    def op_yield(self):
+        op_income = self.strip(self.income.match_title('Operating Income'))
+        op_income_per_share = list_over_list(op_income, self.wa_diluted_shares_out())
+        tev = self.strip(self.values.match_title('Total Enterprise Value'))
+        i = 0
+        TEV = []
+        while i < len(tev):
+            TEV.append(average(tev[i:i + 4]))
+            # print(a, i, j)
+            i += 4
+
+        # Trim the excess in TEV length over Diluted shares outstanding.
+        TEV_per_share = list_over_list(TEV[len(TEV) - len(self.wa_diluted_shares_out()):],
+                                       self.wa_diluted_shares_out())
+
+        op_income_yield = list_over_list(op_income_per_share, TEV_per_share)
+        avg_yield = statistics.median(op_income_yield)
+        print("Earning yield from {:.2f} to {:.2f} at average {:.2f}% for: {}".format(
+            op_income_yield[0], op_income_yield[-1],
+            avg_yield, op_income_yield))
+        self.profiler._collect(avg_yield, Tag.op_income, ProfMethod.Average,
+                               val2=statistics.median(op_income_yield[self.half_len:]),
+                               val3=op_income_yield[-1])
+
     def owner_yield(self):
         # also known as Levered FCF
         earning_not_strip = self.cashflow.match_title('Free Cash Flow$', none_is_optional=True)
@@ -518,6 +542,7 @@ ProfVerbose = {ProfMethod.CAGR: 'CAGR',
 class Tag(Enum):
     rev_per_share = 1
     epu = 2
+    op_income = 16
     owner_yield = 13
     # AFFO commented diff
     # affo_per_share = 3
@@ -580,6 +605,7 @@ class ProfManager:
     # AFFO and Tangible commented diffs
     Rate = {Tag.rev_per_share: {'high': .1, 'mid': .05},
             Tag.epu: {'high': .2, 'mid': .1},
+            Tag.op_income: {'high': .08, 'mid': .05},
             Tag.owner_yield: {'high': .08, 'mid': .03},
             # Tag.affo_per_share: {'high': 4., 'mid': 2.},
             # Tag.nav_per_share: {'high': .08, 'mid': .05},
@@ -895,6 +921,7 @@ class WorkWrap:
         Tag_to_long = {
             Tag.rev_per_share: 'Sales per share',
             Tag.epu: 'EPS',
+            Tag.op_income: 'Op yield',
             Tag.owner_yield: 'FCF yield',
             Tag.ROIC: 'ROIC',
             Tag.net_debt_over_ebit: 'Net debt /EBIT',
@@ -961,6 +988,7 @@ class WorkWrap:
             # Last 10 years metric
             {'val': com.prof[Tag.rev_per_share]['val{}'.format(range_index)], 'rule': gen_rule},
             {'val': com.prof[Tag.epu]['val{}'.format(range_index)], 'rule': gen_rule},
+            {'val': com.prof[Tag.op_income]['val{}'.format(range_index)], 'rule': gen_rule},
             {'val': com.prof[Tag.owner_yield]['val{}'.format(range_index)], 'rule': gen_rule},
             # AFFO and Tangible commented diffs
             # {'val': c.prof[Tag.affo_per_share]['val{}'.format(_)], 'rule': gen_rule},
