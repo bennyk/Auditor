@@ -240,13 +240,30 @@ class DCF(Spread):
 # https://stackoverflow.com/questions/1015307/python-bind-an-unbound-method
 class UFCF:
     def __init__(self, src: DCF):
-        # ni = src.strip(src.income.match_title('Net Income$'))
-        ufcf = src.strip(src.income.match_title('EBITDA$'))
-        tax = src.strip(src.income.match_title('Income Tax Expense$'))
-        # ie = self.strip(self.income.match_title('Interest Expense$'))
-        ufcf = list_add_list(ufcf, tax)
+        net_income = src.strip(src.income.match_title('Net Income$'))
+        ufcf = net_income
 
-        capex = src.strip(src.cashflow.match_title('Capital Expenditure$'))
+        depreciation_not_strip = src.cashflow.match_title('Total Depreciation', none_is_optional=True)
+        if depreciation_not_strip is not None:
+            depreciation = src.strip(depreciation_not_strip)
+            ufcf = list_add_list(ufcf, depreciation)
+
+        interest = src.strip(src.income.match_title('Interest Expense$'))
+        interest = list_abs(interest)
+        ufcf = list_add_list(ufcf, interest)
+
+        tax_not_strip = src.income.match_title('Income Tax Expense$', none_is_optional=True)
+        if tax_not_strip is not None:
+            _ = src.strip(tax_not_strip)
+            _ = [0 if v is None else v for v in _]
+            tax = list_negate(_)
+            ufcf = list_add_list(ufcf, tax)
+
+        capex_not_strip = src.cashflow.match_title('Capital Expenditure$', none_is_optional=True)
+        if capex_not_strip is not None:
+            capex = src.strip(capex_not_strip)
+        else:
+            capex = src.strip(src.cashflow.match_title('Acquisition of Real Estate Assets$'))
         ufcf = list_add_list(ufcf, capex)
 
         _ = src.cashflow.match_title(
@@ -255,7 +272,7 @@ class UFCF:
             work_cap = src.strip(_)
             ufcf = list_add_list(ufcf, work_cap)
         else:
-            colour_print('Missing NWC entry', bcolors.WARNING)
+            colour_print('Missing Net working capital entry', bcolors.WARNING)
 
         # Ignore debt issuance/repaid for DCF?
         # ChatGPT:
@@ -269,11 +286,8 @@ class UFCF:
             # earning = list_add_list(earning, debt_issued)
             ufcf = list_add_list(ufcf, debt_repaid)
 
-        # ebit = list_add_list(ebit, ie)
         self.ufcf_per_share = list_over_list(
             ufcf[src.half_len:], src.wa_diluted_shares_out()[src.half_len:])
-        # ufcf, src.wa_diluted_shares_out())
-        # TODO option for half_len?
         self.tgr = src.tgr
         self.term_dr = src.term_dr
 
