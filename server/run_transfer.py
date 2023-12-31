@@ -204,7 +204,9 @@ class Clipboard:
     def write_excel(self, title):
         soup = BeautifulSoup(driver.page_source, 'lxml')
         a = [x for x in soup.find_all('table')]
-        assert len(a) == 1
+        if len(a) == 0:
+            colour_print("Empty table: \"{}\"".format(title), bcolors.WARNING)
+            return
 
         bootstrap.Out = open('console.log', 'w')
         with bootstrap.Out as out:
