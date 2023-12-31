@@ -127,8 +127,9 @@ class Table:
                 c1 = "{}{}".format(colnum_string(j), i)
                 a = sheet_ranges[c1].value
                 if type(sheet_ranges[c1].value) is str:
-                    if re.match(r'[-–]|(?:\d+(?:(\.\d+))?)x$', a):
+                    if re.match(r'[-–]|(?:[,\d]+(?:(\.\d+))?)x$', a):
                         # Match multiple such as n.nnx where n is a digit and x prefix is char
+                        a = a.replace(',', '')
                         a = float(a.replace('x', ''))
                 r.append(a)
             self.tab.append(r)
