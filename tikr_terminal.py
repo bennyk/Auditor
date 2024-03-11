@@ -88,8 +88,14 @@ class SpreadX(Spread):
             i += 4
 
         # Trim the excess in TEV length over Diluted shares outstanding.
-        TEV_per_share = list_over_list(TEV[len(TEV) - len(self.wa_diluted_shares_out()):],
-                                       self.wa_diluted_shares_out())
+        if len(TEV) > len(self.wa_diluted_shares_out()):
+            excess = len(TEV) - len(self.wa_diluted_shares_out())
+            TEV_per_share = list_over_list(TEV[excess:], self.wa_diluted_shares_out())
+        else:
+            while len(self.wa_diluted_shares_out()) > len(TEV):
+                # insert index 0 with 0 value
+                TEV.insert(0, 0)
+            TEV_per_share = list_over_list(TEV, self.wa_diluted_shares_out())
 
         op_income_yield = list_over_list(op_income_per_share, TEV_per_share)
         avg_yield = statistics.median(op_income_yield)
@@ -541,7 +547,7 @@ ProfVerbose = {ProfMethod.CAGR: 'CAGR',
 
 class Tag(Enum):
     rev_per_share = 1
-    epu = 2
+    # epu = 2
     op_income = 16
     owner_yield = 13
     # AFFO commented diff
@@ -554,9 +560,9 @@ class Tag(Enum):
     net_debt_over_ebit = 7
     # net_debt_over_fcf = 15
     ev_over_ebit = 8
-    op_margin = 9
-    retained_earnings_ratio = 10
-    market_cap_ov_retained_earnings = 14
+    # op_margin = 9
+    # retained_earnings_ratio = 10
+    # market_cap_ov_retained_earnings = 14
     # dividend_payout_ratio = 11
     dividend_yield = 12
 
@@ -604,7 +610,7 @@ class ProfManager:
     # TODO report about the underlying rate?
     # AFFO and Tangible commented diffs
     Rate = {Tag.rev_per_share: {'high': .1, 'mid': .05},
-            Tag.epu: {'high': .2, 'mid': .1},
+            # Tag.epu: {'high': .2, 'mid': .1},
             Tag.op_income: {'high': .08, 'mid': .05},
             Tag.owner_yield: {'high': .08, 'mid': .03},
             # Tag.affo_per_share: {'high': 4., 'mid': 2.},
@@ -616,10 +622,10 @@ class ProfManager:
             Tag.ROIC: {'high': .5, 'mid': .3},
             Tag.net_debt_over_ebit: {'high': 5., 'mid': 8.},
             # Tag.net_debt_over_fcf: {'high': 5., 'mid': 8.},
-            Tag.op_margin: {'high': .3, 'mid': .2},
-            Tag.retained_earnings_ratio: {'high': 4., 'mid': 2.},
+            # Tag.op_margin: {'high': .3, 'mid': .2},
+            # Tag.retained_earnings_ratio: {'high': 4., 'mid': 2.},
             # Tag.dividend_payout_ratio: {'high': 1.5, 'mid': 1.},
-            Tag.market_cap_ov_retained_earnings: {'high': .5, 'mid': 1.},
+            # Tag.market_cap_ov_retained_earnings: {'high': .5, 'mid': 1.},
             Tag.dividend_yield: {'high': .05, 'mid': .02},
             Tag.ev_over_ebit: {'high': 12., 'mid': 20.},
             }
@@ -861,10 +867,10 @@ class WorkWrap:
             ColorScaleRule(start_type='num', start_value=10., start_color=ProfManager.Green,
                            mid_type='num', mid_value=15., mid_color=ProfManager.Yellow,
                            end_type='num', end_value=20., end_color=ProfManager.Red),
-        Tag.market_cap_ov_retained_earnings:
-            ColorScaleRule(start_type='num', start_value=.5, start_color=ProfManager.Green,
-                           mid_type='num', mid_value=.8, mid_color=ProfManager.Yellow,
-                           end_type='num', end_value=1.1, end_color=ProfManager.Red),
+        # Tag.market_cap_ov_retained_earnings:
+        #     ColorScaleRule(start_type='num', start_value=.5, start_color=ProfManager.Green,
+        #                    mid_type='num', mid_value=.8, mid_color=ProfManager.Yellow,
+        #                    end_type='num', end_value=1.1, end_color=ProfManager.Red),
         # diff EV/EBIT
         'diff-ev_over_ebit':
             ColorScaleRule(start_type='percentile', start_value=90, start_color=ProfManager.Green,
@@ -920,15 +926,15 @@ class WorkWrap:
 
         Tag_to_long = {
             Tag.rev_per_share: 'Sales per share',
-            Tag.epu: 'EPS',
+            # Tag.epu: 'EPS',
             Tag.op_income: 'Op yield',
             Tag.owner_yield: 'FCF yield',
             Tag.ROIC: 'ROIC',
             Tag.net_debt_over_ebit: 'Net debt /EBIT',
             Tag.ev_over_ebit: 'EV/EBIT',
-            Tag.op_margin: 'Op margin',
-            Tag.retained_earnings_ratio: 'Retained /Net',
-            Tag.market_cap_ov_retained_earnings: 'Market /Retained',
+            # Tag.op_margin: 'Op margin',
+            # Tag.retained_earnings_ratio: 'Retained /Net',
+            # Tag.market_cap_ov_retained_earnings: 'Market /Retained',
             Tag.dividend_yield: 'Dividend yield',
         }
 
@@ -942,8 +948,8 @@ class WorkWrap:
                 self.i += 1
 
         # add extension header
-        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'EPU sen', 'FCF ratio',
-                      'Retained ratio', 'DPU sen', 'Color']
+        ext_header = ['P', 'Market Cap', 'Revenue', 'Op income', 'Net profit', 'FCF ratio',
+                      'DPU sen', 'Color']
         for x in ext_header:
             cell = sheet.cell(row=self.j, column=self.i)
             cell.value = x
@@ -987,7 +993,7 @@ class WorkWrap:
         lead = [
             # Last 10 years metric
             {'val': com.prof[Tag.rev_per_share]['val{}'.format(range_index)], 'rule': gen_rule},
-            {'val': com.prof[Tag.epu]['val{}'.format(range_index)], 'rule': gen_rule},
+            # {'val': com.prof[Tag.epu]['val{}'.format(range_index)], 'rule': gen_rule},
             {'val': com.prof[Tag.op_income]['val{}'.format(range_index)], 'rule': gen_rule},
             {'val': com.prof[Tag.owner_yield]['val{}'.format(range_index)], 'rule': gen_rule},
             # AFFO and Tangible commented diffs
@@ -999,11 +1005,11 @@ class WorkWrap:
              'rule': rule[Tag.net_debt_over_ebit]},
             {'val': com.prof[Tag.ev_over_ebit]['val{}'.format(range_index)], 'number': 'ratio',
              'rule': rule[Tag.ev_over_ebit]},
-            {'val': com.prof[Tag.op_margin]['val{}'.format(range_index)], 'rule': gen_rule},
-            {'val': com.prof[Tag.retained_earnings_ratio]['val{}'.format(range_index)], 'number': 'ratio',
-             'rule': gen_rule},
-            {'val': com.prof[Tag.market_cap_ov_retained_earnings]['val{}'.format(range_index)], 'number': 'ratio',
-             'rule': rule[Tag.market_cap_ov_retained_earnings]},
+            # {'val': com.prof[Tag.op_margin]['val{}'.format(range_index)], 'rule': gen_rule},
+            # {'val': com.prof[Tag.retained_earnings_ratio]['val{}'.format(range_index)], 'number': 'ratio',
+            #  'rule': gen_rule},
+            # {'val': com.prof[Tag.market_cap_ov_retained_earnings]['val{}'.format(range_index)], 'number': 'ratio',
+            #  'rule': rule[Tag.market_cap_ov_retained_earnings]},
             {'val': com.prof[Tag.dividend_yield]['val{}'.format(range_index)], 'rule': gen_rule},
         ]
 
@@ -1057,9 +1063,9 @@ class WorkWrap:
             {'val': com.last_price['revenue'], 'number': 'cap', 'rule': rule['market_cap']},
             {'val': com.last_price['op_income'], 'number': 'cap', 'rule': rule['market_cap']},
             {'val': com.last_price['net_profit'], 'number': 'cap', 'rule': rule['market_cap']},
-            {'val': com.prof[Tag.epu]['val2'], 'number': 'value', 'rule': rule['market_cap']},
+            # {'val': com.prof[Tag.epu]['val2'], 'number': 'value', 'rule': rule['market_cap']},
             {'val': com.prof[Tag.owner_yield]['val2'], 'number': 'value', 'rule': rule['market_cap']},
-            {'val': com.prof[Tag.retained_earnings_ratio]['val2'], 'number': 'value', 'rule': rule['market_cap']},
+            # {'val': com.prof[Tag.retained_earnings_ratio]['val2'], 'number': 'value', 'rule': rule['market_cap']},
             # x100 - KLSE/Bursa DPU use fractional pricing model
             {'val': com.last_price['dpu'] * 100, 'number': 'value', 'rule': rule['market_cap']},
             # P/AFFO commented diff
