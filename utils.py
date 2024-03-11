@@ -60,7 +60,7 @@ def list_minus_list(x, y):
 
 
 def list_abs(x):
-    return list(map(lambda n1: abs(n1), x))
+    return list(map(lambda n1: 0 if n1 is None else abs(n1), x))
 
 
 def list_one(x, l):
