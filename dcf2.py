@@ -87,27 +87,29 @@ class DCF(Spread):
 
         # Revenues, Operating Income, Interest Expense, ...
 
-        self.sales = self.strip(self.estimates.match_title('Revenue'))
-        self.ebit = self.strip(self.estimates.match_title('EBIT'))
-        self.ie = self.strip(self.estimates.match_title('Interest Expense'))
+        self.forward_sales = self.strip(self.estimates.match_title('Revenue'))
+        self.forward_ebit = self.strip(self.estimates.match_title('EBIT$'))
+        self.forward_ie = self.strip(self.estimates.match_title('Interest Expense'))
         self.equity = self.strip(self.balance.match_title('Total Equity'))
         self.debt = self.strip(self.balance.match_title('Total Debt'))
         self.cash = self.strip(self.balance.match_title('Total Cash'))
         self.investments = self.strip(self.balance.match_title('Long-term Investments'))
         self.minority = self.strip(self.income.match_title('Minority Interest'))
         self.shares = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
-        self.eff_tax_rate = self.strip(self.estimates.match_title('Effective Tax Rate'))
+        self.forward_etr = self.strip(self.estimates.match_title('Effective Tax Rate'))
         self.marginal_tax_rate = 25.0
 
     def compute(self):
         d = OrderedDict()
-        self.revenue(d)
+        self.compute_revenue(d)
+        self.compute_ebit(d)
 
         headers = list(d.keys())
-        excel = ExcelOut(['intc'], d, headers=headers, styles=['Percent', 'Comma'])
+        excel = ExcelOut(['intc'], d, headers=headers,
+                         styles=['Percent', 'Comma', 'Percent', 'Comma'])
         excel.start()
 
-    def revenue(self, d):
+    def compute_revenue(self, d):
         # Compute past
         # print(self.sales[:-3])
 
@@ -115,7 +117,7 @@ class DCF(Spread):
 
         sales_growth_rate = d['Revenue growth rate'] = []
         sales = d['Revenue'] = []
-        forward_sales = self.sales[-4:]
+        forward_sales = self.forward_sales[-4:]
         for i in range(1, len(forward_sales)):
             grow_rate = (forward_sales[i] - forward_sales[i-1]) / forward_sales[i-1]
             sales_growth_rate.append(grow_rate)
@@ -132,6 +134,9 @@ class DCF(Spread):
         sales.append(cur_sales)
 
         # https://tradingeconomics.com/united-states/government-bond-yield
+        # https://tradingeconomics.com/malaysia/government-bond-yield
+        # https://tradingeconomics.com/china/government-bond-yield
+        # https://tradingeconomics.com/hong-kong/government-bond-yield
         # Terminal year period is based on current risk free rate based on 10 years treasury bond note yield
         term_year_per = 0.04
 
@@ -147,6 +152,24 @@ class DCF(Spread):
         sales_growth_rate.append(per)
         cur_sales = cur_sales * (1 + per)
         sales.append(cur_sales)
+
+    def compute_ebit(self, d):
+        sales = d['Revenue']
+        ebit_margin = d['EBIT margin'] = []
+        ebit = d['EBIT'] = []
+
+        for i, e in enumerate(self.forward_ebit[-3:]):
+            ebit_margin.append(e / sales[i])
+            ebit.append(e)
+        fixed_index = len(self.forward_ebit[-3:])-1
+
+        fixed_margin = ebit_margin[-1]
+        for x in range(1, 8):
+            ebit_margin.append(fixed_margin)
+            stable_ebit = fixed_margin * sales[fixed_index+x]
+            ebit.append(stable_ebit)
+        ebit_margin.append(fixed_margin)
+        ebit.append(fixed_margin * sales[-1])
 
 
 class Ticks:
