@@ -97,16 +97,17 @@ class DCF(Spread):
         self.minority = self.strip(self.income.match_title('Minority Interest'))
         self.shares = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
         self.forward_etr = self.strip(self.estimates.match_title('Effective Tax Rate'))
-        self.marginal_tax_rate = 25.0
+        self.marginal_tax_rate = .25
 
     def compute(self):
         d = OrderedDict()
         self.compute_revenue(d)
         self.compute_ebit(d)
+        self.compute_tax(d)
 
         headers = list(d.keys())
         excel = ExcelOut(['intc'], d, headers=headers,
-                         styles=['Percent', 'Comma', 'Percent', 'Comma'])
+                         styles=['Percent', 'Comma', 'Percent', 'Comma', 'Percent'])
         excel.start()
 
     def compute_revenue(self, d):
@@ -170,6 +171,21 @@ class DCF(Spread):
             ebit.append(stable_ebit)
         ebit_margin.append(fixed_margin)
         ebit.append(fixed_margin * sales[-1])
+
+    def compute_tax(self, d):
+        etr = d['Tax rate'] = []
+
+        for i, e in enumerate(self.forward_etr[-3:]):
+            etr.append(e/100)
+
+        # previous year tax rate + (marginal tax rate - previous year tax rate) / 5
+        start_tax_rate = tax_rate = etr[-1]
+        etr.append(tax_rate)
+        etr.append(tax_rate)
+        for x in range(1, 6):
+            tax_rate = tax_rate+(self.marginal_tax_rate - start_tax_rate)/5
+            etr.append(tax_rate)
+        etr.append(tax_rate)
 
 
 class Ticks:
