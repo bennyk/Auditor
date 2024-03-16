@@ -104,10 +104,11 @@ class DCF(Spread):
         self.compute_revenue(d)
         self.compute_ebit(d)
         self.compute_tax(d)
+        self.compute_ebt(d)
 
         headers = list(d.keys())
         excel = ExcelOut(['intc'], d, headers=headers,
-                         styles=['Percent', 'Comma', 'Percent', 'Comma', 'Percent'])
+                         styles=['Percent', 'Comma', 'Percent', 'Comma', 'Percent', 'Comma'])
         excel.start()
 
     def compute_revenue(self, d):
@@ -186,6 +187,16 @@ class DCF(Spread):
             tax_rate = tax_rate+(self.marginal_tax_rate - start_tax_rate)/5
             etr.append(tax_rate)
         etr.append(tax_rate)
+
+    def compute_ebt(self, d):
+        ebit = d['EBIT']
+        tax_rate = d['Tax rate']
+        ebt = d['EBT (Earnings before tax)'] = []
+        for i, e in enumerate(self.forward_ebit[-3:]):
+            ebt.append(e - e * tax_rate[i])
+
+        for x in range(0, 8):
+            ebt.append(ebit[3+x] - ebit[3+x] * tax_rate[3+x])
 
 
 class Ticks:
