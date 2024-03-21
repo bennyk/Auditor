@@ -105,10 +105,12 @@ class DCF(Spread):
         self.compute_ebit(d)
         self.compute_tax(d)
         self.compute_ebt(d)
+        self.compute_reinvestment(d)
+        self.compute_fcff(d)
 
         headers = list(d.keys())
         excel = ExcelOut(['intc'], d, headers=headers,
-                         styles=['Percent', 'Comma', 'Percent', 'Comma', 'Percent', 'Comma'])
+                         styles=['Percent', 'Comma', 'Percent', 'Comma', 'Percent', 'Comma', 'Comma', 'Comma'])
         excel.start()
 
     def compute_revenue(self, d):
@@ -191,12 +193,39 @@ class DCF(Spread):
     def compute_ebt(self, d):
         ebit = d['EBIT']
         tax_rate = d['Tax rate']
-        ebt = d['EBT (Earnings before tax)'] = []
+        nopat = d['NOPAT'] = []
         for i, e in enumerate(self.forward_ebit[-3:]):
-            ebt.append(e - e * tax_rate[i])
+            nopat.append(e - e * tax_rate[i])
 
         for x in range(0, 8):
-            ebt.append(ebit[3+x] - ebit[3+x] * tax_rate[3+x])
+            nopat.append(ebit[3+x] - ebit[3+x] * tax_rate[3+x])
+
+    def compute_reinvestment(self, d):
+        # TODO Actual capex, D&A and changes in working capital
+        # fwd_capex = self.strip(self.estimates.match_title('Capital Expenditure'))
+        # fwd_dna = self.strip(self.estimates.match_title('Depreciation & Amortization'))
+        # fwd change in working capital
+
+        reinvestment = d['- Reinvestment'] = []
+        sales = d['Revenue']
+        for i in range(len(sales)-1):
+            # TODO Hard coded 2.5 for sales to capital ratio
+            r = (sales[i+1]-sales[i])/2.5
+            reinvestment.append(r)
+
+        # Terminal growth rate / End of ROIC * End of NOPAT
+        term_growth_rate = d['Revenue growth rate'][-1]
+        # TODO Cost of capital at year 10 or enter manually
+        roic = .15
+        nopat_end = d['NOPAT'][-1]
+        reinvestment.append(term_growth_rate / roic * nopat_end)
+
+    def compute_fcff(self, d):
+        fcff = d['FCFF'] = []
+        nopat = d['NOPAT']
+        reinvestment = d['- Reinvestment']
+        for i in range(len(nopat)):
+            fcff.append(nopat[i]-reinvestment[i])
 
 
 class Ticks:
