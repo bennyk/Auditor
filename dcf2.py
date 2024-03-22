@@ -1,3 +1,4 @@
+import re
 import pandas as pd
 
 from spread import Spread
@@ -41,7 +42,10 @@ class ExcelOut:
             sheet.column_dimensions[colnum_string(self.j)].width = 30
             cell = sheet.cell(row=i, column=self.j)
             cell.alignment = Alignment(wrapText=True)
-            cell.value = val
+            if re.match(r'empty', val):
+                pass
+            else:
+                cell.value = val
             i += 1
 
         for i in range(2, 12):
@@ -60,22 +64,28 @@ class ExcelOut:
             # Table of mainly profile and last_price data
             self.i = 2
             for val in self.od[key]:
-                self.make_cell(val, self.styles[i])
+                if key != '':
+                    self.make_cell(val, self.styles[i])
 
             self.j += 1
         self.wb.save('out.xlsx')
 
-    def make_cell(self, e, style):
+    def make_cell(self, val, style):
         cell = self.sheet.cell(row=self.j, column=self.i)
         self.sheet.column_dimensions[colnum_string(self.i)].width = 10
         cell.alignment = Alignment(wrapText=True)
-        cell.value = e
+        cell.value = val
         if style == 'Comma':
-            cell.style = 'Comma'
+            cell.style = style
             cell.number_format = '0,0'
-        else:
-            cell.style = 'Percent'
+        elif style == 'Percent':
+            cell.style = style
             cell.number_format = '0.00%'
+        elif style == 'Ratio':
+            # cell.style = style
+            cell.number_format = '0.0000'
+        else:
+            assert False
         cell.font = self.ft
         self.i += 1
 
@@ -98,6 +108,7 @@ class DCF(Spread):
         self.shares = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
         self.forward_etr = self.strip(self.estimates.match_title('Effective Tax Rate'))
         self.marginal_tax_rate = .25
+        self.riskfree_rate = .0408
 
     def compute(self):
         d = OrderedDict()
@@ -107,10 +118,14 @@ class DCF(Spread):
         self.compute_ebt(d)
         self.compute_reinvestment(d)
         self.compute_fcff(d)
+        d['empty1'] = []
+        self.compute_cost_of_capital(d)
+        self.compute_cumulative_df(d)
 
         headers = list(d.keys())
         excel = ExcelOut(['intc'], d, headers=headers,
-                         styles=['Percent', 'Comma', 'Percent', 'Comma', 'Percent', 'Comma', 'Comma', 'Comma'])
+                         styles=['Percent', 'Comma', 'Percent', 'Comma', 'Percent', 'Comma', 'Comma', 'Comma',
+                                 '', 'Percent', 'Ratio', 'Comma'])
         excel.start()
 
     def compute_revenue(self, d):
@@ -142,7 +157,7 @@ class DCF(Spread):
         # https://tradingeconomics.com/china/government-bond-yield
         # https://tradingeconomics.com/hong-kong/government-bond-yield
         # Terminal year period is based on current risk free rate based on 10 years treasury bond note yield
-        term_year_per = 0.04
+        term_year_per = self.riskfree_rate
 
         # Iterating from first year to terminal year in descending grow order, including terminal year
         for n in range(1, 6):
@@ -226,6 +241,34 @@ class DCF(Spread):
         reinvestment = d['- Reinvestment']
         for i in range(len(nopat)):
             fcff.append(nopat[i]-reinvestment[i])
+
+    def compute_cost_of_capital(self, d):
+        # TODO Cost of capital
+        initial_coc = .086
+
+        # Country risk premium set to 4.5% based on U.S. CRP
+        # https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ctryprem.html
+        country_risk_premium = .045
+        coc = d['Cost of capital'] = [initial_coc]*5
+        for i in range(1, 6):
+            # prev coc - (fixed prev coc - risk free rate + country risk premium)/5
+            _ = coc[i-1] - (initial_coc - (self.riskfree_rate + country_risk_premium))/5
+            coc.append(_)
+        coc.append(self.riskfree_rate + country_risk_premium)
+
+    def compute_cumulative_df(self, d):
+        coc = d['Cost of capital']
+        fcff = d['FCFF']
+        cumulated_df = d['Cumulated discount factor'] = []
+        pv = d['PV (FCFF)'] = []
+        for i in range(0, 10):
+            _ = 1/(1+coc[i])
+            if len(cumulated_df) > 0:
+                _ = cumulated_df[i-1]*(1/(1+coc[i]))
+            cumulated_df.append(_)
+
+            # fcff * df
+            pv.append(fcff[i] * cumulated_df[i])
 
 
 class Ticks:
