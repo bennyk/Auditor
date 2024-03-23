@@ -12,11 +12,11 @@ class ExcelOut:
     start_col = 2
     row_margin = 1
 
-    def __init__(self, ticks: [str], entries, styles=None, headers=None):
+    def __init__(self, tick: str, entries, styles=None, headers=None):
         cls = self.__class__
         self.od = entries
         self.headers = headers
-        self.ticks = ticks
+        self.tick = tick
         self.styles = styles
         self.ft = Font(name='Calibri', size=11)
         self.wb = Workbook()
@@ -27,7 +27,7 @@ class ExcelOut:
 
         self.cell = self.sheet.cell(row=1, column=cls.start_col)
         self.start_row_index = cls.row_margin+1
-        self.end_row_index = len(self.ticks) + self.start_row_index+1
+        self.end_row_index = len(self.tick) + self.start_row_index+1
 
         self.j = cls.row_margin + 1
         self.i = 1
@@ -39,7 +39,7 @@ class ExcelOut:
         self.j = 1
         i = 2
         for val in self.headers:
-            sheet.column_dimensions[colnum_string(self.j)].width = 30
+            sheet.column_dimensions[colnum_string(self.j)].width = 32
             cell = sheet.cell(row=i, column=self.j)
             cell.alignment = Alignment(wrapText=True)
             if re.match(r'empty', val):
@@ -48,6 +48,8 @@ class ExcelOut:
                 cell.value = val
             i += 1
 
+        cell = sheet.cell(row=1, column=1)
+        cell.value = self.tick.upper()
         for i in range(2, 12):
             cell = sheet.cell(row=1, column=i)
             cell.value = i-1
@@ -63,9 +65,14 @@ class ExcelOut:
         for i, key in enumerate(self.od):
             # Table of mainly profile and last_price data
             self.i = 2
-            for val in self.od[key]:
-                if key != '':
-                    self.make_cell(val, self.styles[i])
+            if type(self.od[key]) is list:
+                for val in self.od[key]:
+                    if key != '':
+                        self.make_cell(val, self.styles[i])
+            else:
+                assert type(self.od[key]) is float or type(self.od[key]) is int
+                val = self.od[key]
+                self.make_cell(val, self.styles[i])
 
             self.j += 1
         self.wb.save('out.xlsx')
@@ -76,11 +83,14 @@ class ExcelOut:
         cell.alignment = Alignment(wrapText=True)
         cell.value = val
         if style == 'Comma':
-            cell.style = style
-            cell.number_format = '0,0'
+            if val != 0:
+                cell.style = style
+                cell.number_format = '0,0'
         elif style == 'Percent':
             cell.style = style
             cell.number_format = '0.00%'
+        elif style == 'Ratio2':
+            cell.number_format = '0.00'
         elif style == 'Ratio':
             # cell.style = style
             cell.number_format = '0.0000'
@@ -121,11 +131,19 @@ class DCF(Spread):
         d['empty1'] = []
         self.compute_cost_of_capital(d)
         self.compute_cumulative_df(d)
+        self.compute_terminals(d)
 
         headers = list(d.keys())
-        excel = ExcelOut(['intc'], d, headers=headers,
-                         styles=['Percent', 'Comma', 'Percent', 'Comma', 'Percent', 'Comma', 'Comma', 'Comma',
-                                 '', 'Percent', 'Ratio', 'Comma'])
+        excel = ExcelOut(
+            self.tick, d, headers=headers,
+            styles=[
+                # Revenue growth rate demarcation
+                'Percent', 'Comma', 'Percent', 'Comma', 'Percent', 'Comma', 'Comma', 'Comma',
+                # Cost of capital demarcation
+                '', 'Percent', 'Ratio', 'Comma',
+                # Terminal cash flow demarcation
+                '', 'Comma', 'Percent', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Ratio2', 'Ratio2', 'Percent'
+            ])
         excel.start()
 
     def compute_revenue(self, d):
@@ -269,6 +287,29 @@ class DCF(Spread):
 
             # fcff * df
             pv.append(fcff[i] * cumulated_df[i])
+
+    def compute_terminals(self, d):
+        d['empty2'] = []
+        d['Terminal cash flow'] = d['FCFF'][-1]
+        d['Terminal cost of capital'] = d['Cost of capital'][-1]
+        d['Terminal value'] = (d['Terminal cash flow'] /
+                               (d['Terminal cost of capital'] - d['Revenue growth rate'][-1]))
+        # print( d['Cumulated discount factor'] )
+        d['PV (Terminal value)'] = d['Terminal value'] * d['Cumulated discount factor'][-1]
+        d['PV (Cash flow over next 10 years)'] = sum(d['PV (FCFF)'])
+        d['Sum of PV'] =  d['PV (Terminal value)'] + d['PV (Cash flow over next 10 years)']
+        d['Value of operating assets'] =  d['Sum of PV']
+        d['- Debt'] = self.debt[-1]
+        d['- Minority interest'] = 0
+        d['+ Cash'] = self.cash[-1]
+        d['+ Non-operating assets'] = self.investments[-1]
+        d['Value of equity'] = (d['Value of operating assets']
+                                - d['- Debt'] - d['- Minority interest']
+                                + d['+ Cash'] + d['+ Non-operating assets'])
+        d['Number of shares'] = self.shares[-1]
+        d['Estimated value / share'] = d['Value of equity'] / d['Number of shares']
+        d['Price'] = self.strip(self.values.match_title('Price$'))[-1]
+        d['Price as % of value'] = d['Price'] / d['Estimated value / share']
 
 
 class Ticks:
