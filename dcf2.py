@@ -114,7 +114,7 @@ class DCF(Spread):
         self.debt = self.strip(self.balance.match_title('Total Debt'))
         self.cash = self.strip(self.balance.match_title('Total Cash'))
         self.investments = self.strip(self.balance.match_title('Long-term Investments'))
-        self.minority = self.strip(self.income.match_title('Minority Interest'))
+        self.minority = self.income.match_title('Minority Interest', none_is_optional=True)
         self.shares = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
         self.forward_etr = self.strip(self.estimates.match_title('Effective Tax Rate'))
         self.marginal_tax_rate = .25
