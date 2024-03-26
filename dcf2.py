@@ -3,10 +3,12 @@ import pandas as pd
 
 from spread import Spread
 from utils import *
+from bcolors import colour_print, bcolors
 
 from openpyxl import Workbook, load_workbook, worksheet
 from openpyxl.styles import Font, Alignment
 from collections import OrderedDict
+from typing import List
 
 class ExcelOut:
     start_col = 2
@@ -79,13 +81,13 @@ class ExcelOut:
 
     def make_cell(self, val, style):
         cell = self.sheet.cell(row=self.j, column=self.i)
-        self.sheet.column_dimensions[colnum_string(self.i)].width = 10
+        self.sheet.column_dimensions[colnum_string(self.i)].width = 11
         cell.alignment = Alignment(wrapText=True)
         cell.value = val
         if style == 'Comma':
             if val != 0:
                 cell.style = style
-                cell.number_format = '0,0'
+                cell.number_format = '#,0.00'
         elif style == 'Percent':
             cell.style = style
             cell.number_format = '0.00%'
@@ -112,12 +114,39 @@ class DCF(Spread):
         self.forward_ie = self.strip(self.estimates.match_title('Interest Expense'))
         self.equity = self.strip(self.balance.match_title('Total Equity'))
         self.debt = self.strip(self.balance.match_title('Total Debt'))
-        self.cash = self.strip(self.balance.match_title('Total Cash'))
-        self.investments = self.strip(self.balance.match_title('Long-term Investments'))
-        self.minority = self.income.match_title('Minority Interest', none_is_optional=True)
+
+        cash_not_strip = self.balance.match_title('Total Cash', none_is_optional=True)
+        if cash_not_strip is not None:
+            self.cash = self.strip(cash_not_strip)
+        else:
+            self.cash = self.strip(self.balance.match_title('Cash And Equivalents'))
+            assert self.cash is not None
+
+        investment_not_strip = self.balance.match_title('Long-term Investments', none_is_optional=True)
+        if investment_not_strip is not None:
+            self.investments = self.strip(investment_not_strip)
+        else:
+            self.investments = 0
+
+        minority_not_strip = self.income.match_title('Minority Interest', none_is_optional=True)
+        if minority_not_strip is not None:
+            self.minority = self.strip(minority_not_strip)
+        else:
+            self.minority = 0
+
         self.shares = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
-        self.forward_etr = self.strip(self.estimates.match_title('Effective Tax Rate'))
+        forward_etr_not_strip = self.estimates.match_title('Effective Tax Rate', none_is_optional=True)
+        if forward_etr_not_strip is not None:
+            self.forward_etr = self.strip(forward_etr_not_strip)
+        else:
+            self.forward_etr = 0
+
         self.marginal_tax_rate = .25
+
+        # Malaysia 10 years GBY
+        # self.riskfree_rate = .03884
+
+        # U.S. 10 years GBY
         self.riskfree_rate = .0408
 
     def compute(self):
@@ -162,7 +191,7 @@ class DCF(Spread):
 
         # Stable at year 2 and 3
         stable_growth_rate = sales_growth_rate[-1]
-        cur_sales = forward_sales[-1]  * (1+stable_growth_rate)
+        cur_sales = forward_sales[-1] * (1+stable_growth_rate)
         sales_growth_rate.append(stable_growth_rate)
         sales.append(cur_sales)
 
@@ -210,11 +239,20 @@ class DCF(Spread):
 
     def compute_tax(self, d):
         etr = d['Tax rate'] = []
+        if self.forward_etr == 0:
+            colour_print("Is \"{}\" a REIT company?"
+                         " REIT company distributes at least 90% of its total yearly income to unit holders, the REIT itself is exempt from tax for that year, but unit holders are taxed on the distribution of income"
+                         .format(self.tick), bcolors.WARNING)
+            return
 
         for i, e in enumerate(self.forward_etr[-3:]):
-            etr.append(e/100)
+            if e is not None:
+                etr.append(e/100)
+            else:
+                # TODO: Invalid ETR
+                etr.append(0)
 
-        # previous year tax rate + (marginal tax rate - previous year tax rate) / 5
+        # Previous year tax rate + (marginal tax rate - previous year tax rate) / 5
         start_tax_rate = tax_rate = etr[-1]
         etr.append(tax_rate)
         etr.append(tax_rate)
@@ -228,10 +266,14 @@ class DCF(Spread):
         tax_rate = d['Tax rate']
         nopat = d['NOPAT'] = []
         for i, e in enumerate(self.forward_ebit[-3:]):
-            nopat.append(e - e * tax_rate[i])
+            nopat.append(e)
+            if len(tax_rate) > 0:
+                nopat[-1] -= e * tax_rate[i]
 
         for x in range(0, 8):
-            nopat.append(ebit[3+x] - ebit[3+x] * tax_rate[3+x])
+            nopat.append(ebit[3+x])
+            if len(tax_rate) > 0:
+                nopat[-1] -= ebit[3+x] * tax_rate[3+x]
 
     def compute_reinvestment(self, d):
         # TODO Actual capex, D&A and changes in working capital
@@ -243,6 +285,7 @@ class DCF(Spread):
         sales = d['Revenue']
         for i in range(len(sales)-1):
             # TODO Hard coded 2.5 for sales to capital ratio
+            # https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/capex.html
             r = (sales[i+1]-sales[i])/2.5
             reinvestment.append(r)
 
@@ -302,7 +345,15 @@ class DCF(Spread):
         d['- Debt'] = self.debt[-1]
         d['- Minority interest'] = 0
         d['+ Cash'] = self.cash[-1]
-        d['+ Non-operating assets'] = self.investments[-1]
+        if type(self.investments) is list:
+            # type: List[float]
+            d['+ Non-operating assets'] = self.investments[-1]
+            if self.investments[-1] is None:
+                colour_print("Latest investment was not defined. Fallback to previous year", bcolors.WARNING)
+                assert self.investments[-2] is not None
+                d['+ Non-operating assets'] = self.investments[-2]
+        else:
+            d['+ Non-operating assets'] = 0
         d['Value of equity'] = (d['Value of operating assets']
                                 - d['- Debt'] - d['- Minority interest']
                                 + d['+ Cash'] + d['+ Non-operating assets'])
@@ -371,3 +422,6 @@ class Ticks:
 dcf = DCF('intc', 'spreads')
 dcf.compute()
 print("XXX", dcf)
+
+# Damodaran main data page
+# https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datacurrent.html
