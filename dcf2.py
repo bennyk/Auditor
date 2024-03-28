@@ -109,10 +109,12 @@ class DCF(Spread):
 
         # Revenues, Operating Income, Interest Expense, ...
 
-        self.forward_sales = self.strip(self.estimates.match_title('Revenue'))
-        self.forward_ebit = self.strip(self.estimates.match_title('EBIT$'))
-        self.forward_ie = self.strip(self.estimates.match_title('Interest Expense'))
-        self.equity = self.strip(self.balance.match_title('Total Equity'))
+        self.forward_sales = self.trim_estimates('Revenue', nlead=8)
+        self.forward_ebit = self.trim_estimates('EBIT$')
+
+        # TODO Interest expense and Equity?
+        # self.forward_ie = self.strip(self.estimates.match_title('Interest Expense'))
+        # self.equity = self.strip(self.balance.match_title('Total Equity'))
         self.debt = self.strip(self.balance.match_title('Total Debt'))
 
         cash_not_strip = self.balance.match_title('Total Cash', none_is_optional=True)
@@ -135,9 +137,9 @@ class DCF(Spread):
             self.minority = 0
 
         self.shares = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
-        forward_etr_not_strip = self.estimates.match_title('Effective Tax Rate', none_is_optional=True)
+        forward_etr_not_strip = self.trim_estimates('Effective Tax Rate', none_is_optional=True)
         if forward_etr_not_strip is not None:
-            self.forward_etr = self.strip(forward_etr_not_strip)
+            self.forward_etr = forward_etr_not_strip
         else:
             self.forward_etr = 0
 
@@ -148,6 +150,16 @@ class DCF(Spread):
 
         # U.S. 10 years GBY
         self.riskfree_rate = .0408
+
+    def trim_estimates(self, title, nlead=9, n=4, **args):
+        # Remove past annual/quarterly data from Estimates.
+        est = self.estimates.match_title(title, **args)
+        excess = next((i for i in range(1, n) if est[nlead:][-i] is not None), 0)
+        if excess-1 > 0:
+            result = est[nlead:][:-excess+1]
+        else:
+            result = est[nlead:]
+        return result
 
     def compute(self):
         d = OrderedDict()
@@ -224,10 +236,10 @@ class DCF(Spread):
         ebit_margin = d['EBIT margin'] = []
         ebit = d['EBIT'] = []
 
-        for i, e in enumerate(self.forward_ebit[-3:]):
+        for i, e in enumerate(self.forward_ebit):
             ebit_margin.append(e / sales[i])
             ebit.append(e)
-        fixed_index = len(self.forward_ebit[-3:])-1
+        fixed_index = len(self.forward_ebit)-1
 
         fixed_margin = ebit_margin[-1]
         for x in range(1, 8):
@@ -245,7 +257,7 @@ class DCF(Spread):
                          .format(self.tick), bcolors.WARNING)
             return
 
-        for i, e in enumerate(self.forward_etr[-3:]):
+        for i, e in enumerate(self.forward_etr):
             if e is not None:
                 etr.append(e/100)
             else:
