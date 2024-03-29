@@ -189,8 +189,6 @@ class DCF(Spread):
 
     def compute_revenue(self, d):
         # Compute past
-        # print(self.sales[:-3])
-
         # Compute forward forecast
 
         sales_growth_rate = d['Revenue growth rate'] = []
@@ -257,6 +255,7 @@ class DCF(Spread):
                          .format(self.tick), bcolors.WARNING)
             return
 
+        assert type(self.forward_etr) is list
         for i, e in enumerate(self.forward_etr):
             if e is not None:
                 etr.append(e/100)
@@ -277,7 +276,7 @@ class DCF(Spread):
         ebit = d['EBIT']
         tax_rate = d['Tax rate']
         nopat = d['NOPAT'] = []
-        for i, e in enumerate(self.forward_ebit[-3:]):
+        for i, e in enumerate(self.forward_ebit):
             nopat.append(e)
             if len(tax_rate) > 0:
                 nopat[-1] -= e * tax_rate[i]
@@ -359,11 +358,13 @@ class DCF(Spread):
         d['+ Cash'] = self.cash[-1]
         if type(self.investments) is list:
             # type: List[float]
-            d['+ Non-operating assets'] = self.investments[-1]
-            if self.investments[-1] is None:
+            non_op = 0
+            if self.investments[-1] is not None:
+                non_op = self.investments[-1]
+            elif self.investments[-2] is not None:
                 colour_print("Latest investment was not defined. Fallback to previous year", bcolors.WARNING)
-                assert self.investments[-2] is not None
-                d['+ Non-operating assets'] = self.investments[-2]
+                non_op = self.investments[-2]
+            d['+ Non-operating assets'] = non_op
         else:
             d['+ Non-operating assets'] = 0
         d['Value of equity'] = (d['Value of operating assets']
