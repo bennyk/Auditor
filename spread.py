@@ -47,8 +47,8 @@ class Spread:
                 self.values = tab
             elif re.match(r'Estimates', name):
                 self.estimates = tab
-                # TODO Removing two expected entry and CAGR data not available for TIKR Pro
-                tab.remove(-3)
+                # Removing CAGR data not available for TIKR Pro
+                tab.remove(-1)
             else:
                 # passing Ratios
                 pass
@@ -77,7 +77,6 @@ class Spread:
 
     def share_out_filing(self) -> [float]:
         # "Total Shares Out. Filing Date" is provided in Balance Sheet which computed as fully year
-        # or last trailing year I think.
         # TODO Currently it is being replace by "Weighted Average Diluted Shares Outstanding"
         x = self.balance.match_title('Total Shares Out\.')
         result = list(filter(None, reversed(x[self.start_prefix:])))[0]
