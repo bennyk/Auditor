@@ -353,7 +353,12 @@ class DCF(Spread):
         d['PV (Cash flow over next 10 years)'] = sum(d['PV (FCFF)'])
         d['Sum of PV'] =  d['PV (Terminal value)'] + d['PV (Cash flow over next 10 years)']
         d['Value of operating assets'] =  d['Sum of PV']
-        d['- Debt'] = self.debt[-1]
+
+        debt = 0
+        if self.debt[-1] is not None:
+            debt = self.debt[-1]
+        d['- Debt'] = debt
+
         d['- Minority interest'] = 0
         d['+ Cash'] = self.cash[-1]
         if type(self.investments) is list:
