@@ -199,15 +199,15 @@ class DCF(Spread):
             sales_growth_rate.append(grow_rate)
             sales.append(forward_sales[i])
 
-        # Stable at year 2 and 3
+        # Stable at year 2, 3 (optional here after), 4 and 5
         stable_growth_rate = sales_growth_rate[-1]
         cur_sales = forward_sales[-1] * (1+stable_growth_rate)
-        sales_growth_rate.append(stable_growth_rate)
-        sales.append(cur_sales)
-
-        cur_sales = cur_sales * (1+stable_growth_rate)
-        sales_growth_rate.append(stable_growth_rate)
-        sales.append(cur_sales)
+        for i in range(len(forward_sales)-1, 5):
+            sales_growth_rate.append(stable_growth_rate)
+            sales.append(cur_sales)
+            if i < 4:
+                # Otherwise, ignore the last loop
+                cur_sales = cur_sales * (1+stable_growth_rate)
 
         # https://tradingeconomics.com/united-states/government-bond-yield
         # https://tradingeconomics.com/malaysia/government-bond-yield
@@ -240,7 +240,8 @@ class DCF(Spread):
         fixed_index = len(self.forward_ebit)-1
 
         fixed_margin = ebit_margin[-1]
-        for x in range(1, 8):
+        ebit_range = 10 - len(self.forward_ebit) + 1
+        for x in range(1, ebit_range):
             ebit_margin.append(fixed_margin)
             stable_ebit = fixed_margin * sales[fixed_index+x]
             ebit.append(stable_ebit)
@@ -265,8 +266,9 @@ class DCF(Spread):
 
         # Previous year tax rate + (marginal tax rate - previous year tax rate) / 5
         start_tax_rate = tax_rate = etr[-1]
-        etr.append(tax_rate)
-        etr.append(tax_rate)
+        for i in range(len(self.forward_etr), 5):
+            etr.append(tax_rate)
+
         for x in range(1, 6):
             tax_rate = tax_rate+(self.marginal_tax_rate - start_tax_rate)/5
             etr.append(tax_rate)
@@ -281,10 +283,11 @@ class DCF(Spread):
             if len(tax_rate) > 0:
                 nopat[-1] -= e * tax_rate[i]
 
-        for x in range(0, 8):
-            nopat.append(ebit[3+x])
+        nopat_start = len(self.forward_ebit)
+        for i in range(nopat_start, 11):
+            nopat.append(ebit[i])
             if len(tax_rate) > 0:
-                nopat[-1] -= ebit[3+x] * tax_rate[3+x]
+                nopat[-1] -= ebit[i] * tax_rate[i]
 
     def compute_reinvestment(self, d):
         # TODO Actual capex, D&A and changes in working capital
