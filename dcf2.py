@@ -154,11 +154,13 @@ class DCF(Spread):
     def trim_estimates(self, title, nlead=9, n=4, **args):
         # Remove past annual/quarterly data from Estimates.
         est = self.estimates.match_title(title, **args)
-        excess = next((i for i in range(1, n) if est[nlead:][-i] is not None), 0)
-        if excess-1 > 0:
-            result = est[nlead:][:-excess+1]
-        else:
-            result = est[nlead:]
+        result = None
+        if est is not None:
+            excess = next((i for i in range(1, n) if est[nlead:][-i] is not None), 0)
+            if excess-1 > 0:
+                result = est[nlead:][:-excess+1]
+            else:
+                result = est[nlead:]
         return result
 
     def compute(self):
@@ -441,6 +443,13 @@ class Ticks:
 
 
 dcf = DCF('intc', 'spreads')
+# dcf = DCF('jaks', 'spreads')
+# dcf = DCF('pecca', 'spreads')
+# dcf = DCF('dlady', 'spreads')
+# dcf = DCF('uchitec', 'spreads')
+# dcf = DCF('save', 'spreads')
+# dcf = DCF('vitrox', 'spreads')
+# dcf = DCF('kipreit', 'spreads')
 dcf.compute()
 print("XXX", dcf)
 
