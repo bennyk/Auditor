@@ -9,6 +9,8 @@ from openpyxl import Workbook, load_workbook, worksheet
 from openpyxl.styles import Font, Alignment
 from collections import OrderedDict
 from typing import List
+import yfinance as yf
+
 
 class ExcelOut:
     start_col = 2
@@ -102,10 +104,86 @@ class ExcelOut:
         self.i += 1
 
 
+class DataSet:
+    def __init__(self, country, industry):
+        self.path = "datacurrent"
+        self.country = country
+        self.industry_name = industry
+
+    def get_country_tax_rates(self):
+        name = 'countrytaxrates'
+        result = None
+        wb = load_workbook(self.path + '/{}.xlsx'.format(name))
+        ws = wb[name]
+        for i in range(1, ws.max_row):
+            if ws['A{}'.format(i)].value == self.country:
+                result = ws.cell(row=i, column=ws.max_column).value
+                break
+        assert result is not None
+        return result
+
+    def get_riskfree_rate(self):
+        # TODO Option to fetch it from web
+        # Country 10 years GBY
+        # https://tradingeconomics.com/united-states/government-bond-yield
+        # https://tradingeconomics.com/malaysia/government-bond-yield
+        # https://tradingeconomics.com/china/government-bond-yield
+        # https://tradingeconomics.com/hong-kong/government-bond-yield
+        tab = {
+            'Malaysia': .03884,
+            'United States': .0408,
+            # 'United States': .0454,
+            'Taiwan': .01475,
+            'China': .02298,
+            'Hong Kong': .03825, }
+        assert self.country in tab
+        return tab[self.country]
+
+    def get_wacc(self):
+        name = 'wacc'
+        result = None
+        wb = load_workbook(self.path + '/{}.xlsx'.format(name))
+        ws = wb['Industry Averages']
+        for i in range(20, ws.max_row):
+            print(ws['A{}'.format(i)].value)
+            if re.match(self.industry_name, ws['A{}'.format(i)].value, re.IGNORECASE):
+                result = ws.cell(row=i, column=ws.max_column).value
+                break
+        assert result is not None
+        return result
+
+    def get_equity_risk_premium(self):
+        result = None
+        wb = load_workbook(self.path + '/{}.xlsx'.format('ERPs by country'))
+        ws = wb['Sheet1']
+        for i in range(8, ws.max_row):
+            if re.match(self.country, ws['A{}'.format(i)].value):
+                result = ws.cell(row=i, column=5).value
+                break
+        assert result is not None
+        return result
+
+
 class DCF(Spread):
-    def __init__(self, tick, path):
+    def __init__(self, tick, country=None, industry=None, path=None):
+        colour_print("Company's ticker '{}'".format(tick), bcolors.UNDERLINE)
+
+        if country is None:
+            country = 'United States'
+            colour_print("Defaulting country to '{}'?".format(country), bcolors.WARNING)
+
+        if industry is None:
+            industry = 'semiconductor'
+            colour_print("Defaulting industry to '{}'?".format(industry), bcolors.WARNING)
+
+        if path is None:
+            path = 'spreads'
+            print("Set path to '{}'".format(path))
+
         self.wb = load_workbook(path + '/' + tick + '.xlsx')
         super().__init__(self.wb, tick)
+
+        self.dataset = DataSet(country, industry)
 
         # Revenues, Operating Income, Interest Expense, ...
 
@@ -113,8 +191,9 @@ class DCF(Spread):
         self.forward_ebit = self.trim_estimates('EBIT$')
 
         # TODO Interest expense and Equity?
-        # self.forward_ie = self.strip(self.estimates.match_title('Interest Expense'))
+        self.ie = self.strip(self.income.match_title('Interest Expense'))
         # self.equity = self.strip(self.balance.match_title('Total Equity'))
+        self.current_debt = self.strip(self.balance.match_title('Current Portion of Long-Term Debt'))
         self.debt = self.strip(self.balance.match_title('Total Debt'))
 
         cash_not_strip = self.balance.match_title('Total Cash', none_is_optional=True)
@@ -143,13 +222,10 @@ class DCF(Spread):
         else:
             self.forward_etr = 0
 
-        self.marginal_tax_rate = .25
+        self.marginal_tax_rate = self.dataset.get_country_tax_rates()
 
-        # Malaysia 10 years GBY
-        # self.riskfree_rate = .03884
-
-        # U.S. 10 years GBY
-        self.riskfree_rate = .0408
+        # Country 10 years GBY
+        self.riskfree_rate = self.dataset.get_riskfree_rate()
 
     def trim_estimates(self, title, nlead=9, n=4, **args):
         # Remove past annual/quarterly data from Estimates.
@@ -211,10 +287,6 @@ class DCF(Spread):
                 # Otherwise, ignore the last loop
                 cur_sales = cur_sales * (1+stable_growth_rate)
 
-        # https://tradingeconomics.com/united-states/government-bond-yield
-        # https://tradingeconomics.com/malaysia/government-bond-yield
-        # https://tradingeconomics.com/china/government-bond-yield
-        # https://tradingeconomics.com/hong-kong/government-bond-yield
         # Terminal year period is based on current risk free rate based on 10 years treasury bond note yield
         term_year_per = self.riskfree_rate
 
@@ -320,18 +392,36 @@ class DCF(Spread):
             fcff.append(nopat[i]-reinvestment[i])
 
     def compute_cost_of_capital(self, d):
-        # TODO Cost of capital
-        initial_coc = .086
+        # Cost of debt
+        interest_expense = self.ie[-1]
+        debt = self.debt[-1] + self.current_debt[-1]
+        # I have excluded tax rate leading to lower debt number.
+        pretax_cost_of_debt = abs(interest_expense / debt)
+        cost_of_debt = pretax_cost_of_debt * (1-average(self.forward_etr) / 100)
 
-        # Country risk premium set to 4.5% based on U.S. CRP
+        # Cost of equity
+        yf_ticker = yf.Ticker(self.tick)
+        beta = yf_ticker.info['beta']
+        print("Obtain beta:", beta)
+        mrp = self.dataset.get_equity_risk_premium()
+        cost_of_equity = self.riskfree_rate + beta * mrp
+        market_cap = yf_ticker.info['marketCap'] / 1e6
+
+        total_cap = market_cap + debt
+        initial_coc = market_cap/total_cap * cost_of_equity + debt/total_cap * cost_of_debt
+
+        # Mature market ERP set to 4.5% and 0% based on U.S. CRP (Country risk premium)
+        # https://www.youtube.com/watch?v=kyKfJ_7-mdg
         # https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ctryprem.html
-        country_risk_premium = .045
+        crp = 0
+        mature_market_erp = .045
+        total_erp = crp + mature_market_erp
         coc = d['Cost of capital'] = [initial_coc]*5
         for i in range(1, 6):
-            # prev coc - (fixed prev coc - risk free rate + country risk premium)/5
-            _ = coc[i-1] - (initial_coc - (self.riskfree_rate + country_risk_premium))/5
-            coc.append(_)
-        coc.append(self.riskfree_rate + country_risk_premium)
+            # Prev coc - (fixed prev coc - riskfree rate + mature market risk + country risk premium)/5
+            current_coc = coc[i-1] - (initial_coc - (self.riskfree_rate + total_erp))/5
+            coc.append(current_coc)
+        coc.append(self.riskfree_rate + mature_market_erp)
 
     def compute_cumulative_df(self, d):
         coc = d['Cost of capital']
@@ -442,14 +532,7 @@ class Ticks:
     #     # excel.start()
 
 
-dcf = DCF('intc', 'spreads')
-# dcf = DCF('jaks', 'spreads')
-# dcf = DCF('pecca', 'spreads')
-# dcf = DCF('dlady', 'spreads')
-# dcf = DCF('uchitec', 'spreads')
-# dcf = DCF('save', 'spreads')
-# dcf = DCF('vitrox', 'spreads')
-# dcf = DCF('kipreit', 'spreads')
+dcf = DCF('intc')
 dcf.compute()
 print("XXX", dcf)
 
