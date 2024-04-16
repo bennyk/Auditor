@@ -88,10 +88,17 @@ class MainTable:
             print("Skip start offset")
 
     def run(self):
-        elem = driver.find_element(By.XPATH, "//span[contains(@style, 'font-weight: bold')]")
+        print("Waiting to prompt header dialog")
+        time.sleep(3)
+        header_containers = driver.find_element(By.XPATH,
+            "//div[contains(@class, 'container') and contains(@class, 'header')]")
+        line = header_containers.text.split('\n')
+        assert len(line) > 6
+        header = line[0]
+        sticky_price = line[6]
+
         # Parse the first line text only at the time being.
-        header = elem.text
-        clip = Clipboard(header)
+        clip = Clipboard(header, sticky_price)
 
         # max case for full span
         # offset = 15*start_offset/years# self.open('Financials', start_offset=0)
@@ -113,11 +120,12 @@ class MainTable:
 
 
 class Clipboard:
-    def __init__(self, header):
+    def __init__(self, header, sticky_price):
         self.wb = Workbook()
         ws = self.wb.create_sheet('Header')
         # set cell to header
         ws.cell(row=1, column=1, value=header)
+        ws.cell(row=2, column=1, value=sticky_price)
 
         # removing initial sheet
         ws = self.wb.active
