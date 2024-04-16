@@ -108,7 +108,7 @@ class DataSet:
     def __init__(self, country, industry):
         self.path = "datacurrent"
         self.country = country
-        self.industry_name = industry
+        self.industry = industry
 
     def get_country_tax_rates(self):
         name = 'countrytaxrates'
@@ -123,19 +123,19 @@ class DataSet:
         return result
 
     def get_riskfree_rate(self):
-        # TODO Option to fetch it from web
-        # Country 10 years GBY
+        # TODO Country 10 years GBY on 13-Apr-2024 at the following websites: -
         # https://tradingeconomics.com/united-states/government-bond-yield
         # https://tradingeconomics.com/malaysia/government-bond-yield
         # https://tradingeconomics.com/china/government-bond-yield
         # https://tradingeconomics.com/hong-kong/government-bond-yield
+        # https://tradingeconomics.com/taiwan/government-bond-yield
         tab = {
-            'Malaysia': .03884,
-            'United States': .0408,
-            # 'United States': .0454,
-            'Taiwan': .01475,
-            'China': .02298,
-            'Hong Kong': .03825, }
+            'Malaysia': .03947,
+            # 'United States': .0408,
+            'United States': .04532,
+            'Taiwan': .01565,
+            'China': .02291,
+            'Hong Kong': .0388, }
         assert self.country in tab
         return tab[self.country]
 
@@ -146,7 +146,7 @@ class DataSet:
         ws = wb['Industry Averages']
         for i in range(20, ws.max_row):
             print(ws['A{}'.format(i)].value)
-            if re.match(self.industry_name, ws['A{}'.format(i)].value, re.IGNORECASE):
+            if re.match(self.industry, ws['A{}'.format(i)].value, re.IGNORECASE):
                 result = ws.cell(row=i, column=ws.max_column).value
                 break
         assert result is not None
@@ -161,6 +161,23 @@ class DataSet:
                 result = ws.cell(row=i, column=5).value
                 break
         assert result is not None
+        return result
+
+    def get_currency_suffix(self, sticky_price):
+        assert self.country is not None
+        result = None
+        with open(self.path + '/yahoo_currency_suffix.txt', encoding='utf-8') as infile:
+            suffix_index = None
+            for i, field in enumerate(infile.readline().split('|')):
+                if re.match('suffix', field, re.IGNORECASE):
+                    suffix_index = i
+                    break
+            assert suffix_index is not None
+            for line in infile:
+                a = line[:-1].split('|')
+                if re.match(a[suffix_index][1:], sticky_price):
+                    result = a[suffix_index][1:]
+                    break
         return result
 
 
@@ -193,7 +210,10 @@ class DCF(Spread):
         # TODO Interest expense and Equity?
         self.ie = self.strip(self.income.match_title('Interest Expense'))
         # self.equity = self.strip(self.balance.match_title('Total Equity'))
-        self.current_debt = self.strip(self.balance.match_title('Current Portion of Long-Term Debt'))
+        self.current_debt = [0.]
+        current_debt_not_strip = self.balance.match_title('Current Portion of Long-Term Debt', none_is_optional=True)
+        if current_debt_not_strip is not None:
+           self.current_debt = self.strip(current_debt_not_strip)
         self.debt = self.strip(self.balance.match_title('Total Debt'))
 
         cash_not_strip = self.balance.match_title('Total Cash', none_is_optional=True)
@@ -394,13 +414,28 @@ class DCF(Spread):
     def compute_cost_of_capital(self, d):
         # Cost of debt
         interest_expense = self.ie[-1]
-        debt = self.debt[-1] + self.current_debt[-1]
+        current_debt = self.current_debt[-1] if self.current_debt[-1] is not None else 0
+        debt = self.debt[-1] + current_debt
         # I have excluded tax rate leading to lower debt number.
         pretax_cost_of_debt = abs(interest_expense / debt)
-        cost_of_debt = pretax_cost_of_debt * (1-average(self.forward_etr) / 100)
+        if self.forward_etr == 0:
+            cost_of_debt = pretax_cost_of_debt
+        else:
+            cost_of_debt = pretax_cost_of_debt * (1-average(self.forward_etr) / 100)
 
         # Cost of equity
-        yf_ticker = yf.Ticker(self.tick)
+        ticker = self.tick
+        if re.match(r'\d{4}$', self.tick):
+            # Regex to match currency denomination express by 4 digits such as 9618.HK
+            suffix = self.dataset.get_currency_suffix(self.sticky_price)
+            ticker = ticker + '.{}'.format(suffix)
+        yf_ticker = yf.Ticker(ticker)
+        if 'beta' not in yf_ticker.info:
+            assert len(self.head) > 0
+            initial_query = ' '.join(self.head.split()[:-1])
+            print("Waiting to query Yahoo Finance server with '{}'".format(initial_query))
+            yf_ticker = yf.Ticker(get_symbol(initial_query))
+
         beta = yf_ticker.info['beta']
         print("Obtain beta:", beta)
         mrp = self.dataset.get_equity_risk_premium()
@@ -532,7 +567,7 @@ class Ticks:
     #     # excel.start()
 
 
-dcf = DCF('intc')
+dcf = DCF('intc',)
 dcf.compute()
 print("XXX", dcf)
 
