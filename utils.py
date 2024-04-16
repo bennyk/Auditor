@@ -1,4 +1,5 @@
 import re
+import yahooquery as yq
 
 
 def colnum_string(n):
@@ -101,5 +102,23 @@ def cagr(l: [float]) -> float:
 
 def zsum(a):
     return sum(list(map(lambda x: x if x is not None else 0, a)))
+
+
+def get_symbol(query, preferred_exchange=''):
+    try:
+        data = yq.search(query)
+    except ValueError: # Will catch JSONDecodeError
+        print(query)
+    else:
+        quotes = data['quotes']
+        if len(quotes) == 0:
+            return 'No Symbol Found'
+
+        symbol = quotes[0]['symbol']
+        for quote in quotes:
+            if quote['exchange'] == preferred_exchange:
+                symbol = quote['symbol']
+                break
+        return symbol
 
 

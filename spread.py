@@ -30,6 +30,7 @@ class Spread:
             if name == 'Header':
                 ws = wb[name]
                 self.head = ws['A1'].value
+                self.sticky_price = ws['A2'].value
                 continue
 
             tab = Table(wb[name])
