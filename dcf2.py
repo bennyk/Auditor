@@ -10,7 +10,10 @@ from openpyxl.styles import Font, Alignment
 from collections import OrderedDict
 from typing import List
 import yfinance as yf
+from tabulate import tabulate
 
+total_main_col = 12
+total_half_col = int(total_main_col/2)
 
 class ExcelOut:
     start_col = 2
@@ -54,12 +57,12 @@ class ExcelOut:
 
         cell = sheet.cell(row=1, column=1)
         cell.value = self.tick.upper()
-        for i in range(2, 12):
-            cell = sheet.cell(row=1, column=i)
-            cell.value = i-1
+        sheet.cell(row=1, column=2).value = 'Base year'
+        for i in range(1, total_main_col-1):
+            cell = sheet.cell(row=1, column=i+2)
+            cell.value = i
             cell.alignment = Alignment(horizontal='center')
-        cell = sheet.cell(row=1, column=i+1)
-        cell.value = 'Terminal year'
+        sheet.cell(row=1, column=total_main_col+1).value = 'Terminal year'
 
         self.j += 1
 
@@ -85,7 +88,11 @@ class ExcelOut:
         cell = self.sheet.cell(row=self.j, column=self.i)
         self.sheet.column_dimensions[colnum_string(self.i)].width = 11
         cell.alignment = Alignment(wrapText=True)
-        cell.value = val
+        if (type(val) is int or type(val) is float) and val == 0:
+            # Suppress zero value to empty string.
+            cell.value = ''
+        else:
+            cell.value = val
         if style == 'Comma':
             if val != 0:
                 cell.style = style
@@ -167,6 +174,7 @@ class DataSet:
         assert self.country is not None
         result = None
         with open(self.path + '/yahoo_currency_suffix.txt', encoding='utf-8') as infile:
+            # https://www.gnucash.org/docs/v4/C/gnucash-help/fq-spec-yahoo.html
             suffix_index = None
             for i, field in enumerate(infile.readline().split('|')):
                 if re.match('suffix', field, re.IGNORECASE):
@@ -179,6 +187,46 @@ class DataSet:
                     result = a[suffix_index][1:]
                     break
         return result
+
+    def get_sales_to_cap_ratio(self):
+        name = 'capex'
+        sales_to_cap_index = None
+        result = None
+        wb = load_workbook(self.path + '/{}.xlsx'.format(name))
+        ws = wb['Industry Averages']
+        for i in range(1, ws.max_column+1):
+            a = ws.cell(row=8, column=i).value
+            if re.match(r'Sales/ Invested Capital', a):
+                sales_to_cap_index = i
+                break
+        assert sales_to_cap_index is not None
+        for i in range(8, ws.max_row):
+            if re.match(self.industry, ws['A{}'.format(i)].value, re.IGNORECASE):
+                result = ws.cell(row=i, column=sales_to_cap_index).value
+                break
+        assert result is not None
+        return result
+
+    def match_sales_to_cap_ratio(self, sales_to_cap_ratio):
+        name = 'capex'
+        sales_to_cap_index = None
+        result = None
+        wb = load_workbook(self.path + '/{}.xlsx'.format(name))
+        ws = wb['Industry Averages']
+        for i in range(1, ws.max_column + 1):
+            a = ws.cell(row=8, column=i).value
+            if re.match(r'Sales/ Invested Capital', a):
+                sales_to_cap_index = i
+                break
+        assert sales_to_cap_index is not None
+        result = []
+        for i in range(9, ws.max_row):
+            diff = ws.cell(row=i, column=sales_to_cap_index).value - sales_to_cap_ratio
+            # print(ws.cell(row=i, column=1).value, diff)
+            result.append([
+                ws.cell(row=i, column=1).value,
+                ws.cell(row=i, column=sales_to_cap_index).value, abs(diff), ])
+        return sorted(result, key=lambda e: e[2])
 
 
 class DCF(Spread):
@@ -204,12 +252,14 @@ class DCF(Spread):
 
         # Revenues, Operating Income, Interest Expense, ...
 
+        self.sales = self.strip(self.income.match_title('Total Revenues'))
         self.forward_sales = self.trim_estimates('Revenue', nlead=8)
         self.forward_ebit = self.trim_estimates('EBIT$')
 
         # TODO Interest expense and Equity?
         self.ie = self.strip(self.income.match_title('Interest Expense'))
-        # self.equity = self.strip(self.balance.match_title('Total Equity'))
+        self.book_value_equity = self.strip(self.balance.match_title('Total Equity'))
+        self.book_value_debt = self.strip(self.balance.match_title('Total Debt'))
         self.current_debt = [0.]
         current_debt_not_strip = self.balance.match_title('Current Portion of Long-Term Debt', none_is_optional=True)
         if current_debt_not_strip is not None:
@@ -247,7 +297,11 @@ class DCF(Spread):
         # Country 10 years GBY
         self.riskfree_rate = self.dataset.get_riskfree_rate()
 
-    def trim_estimates(self, title, nlead=9, n=4, **args):
+        # Sea of change by Howard Marks
+        # https://www.oaktreecapital.com/insights/memo/sea-change
+        # self.riskfree_rate = .036
+
+    def trim_estimates(self, title, nlead=8, n=4, **args):
         # Remove past annual/quarterly data from Estimates.
         est = self.estimates.match_title(title, **args)
         result = None
@@ -271,6 +325,7 @@ class DCF(Spread):
         self.compute_cost_of_capital(d)
         self.compute_cumulative_df(d)
         self.compute_terminals(d)
+        self.compute_return_invested_capital(d)
 
         headers = list(d.keys())
         excel = ExcelOut(
@@ -281,7 +336,9 @@ class DCF(Spread):
                 # Cost of capital demarcation
                 '', 'Percent', 'Ratio', 'Comma',
                 # Terminal cash flow demarcation
-                '', 'Comma', 'Percent', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Ratio2', 'Ratio2', 'Percent'
+                '', 'Comma', 'Percent', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Comma', 'Ratio2', 'Ratio2', 'Percent',
+                # Sales to cap 
+                '', 'Comma', 'Percent',
             ])
         excel.start()
 
@@ -292,7 +349,7 @@ class DCF(Spread):
         sales_growth_rate = d['Revenue growth rate'] = []
         sales = d['Revenue'] = []
         forward_sales = self.forward_sales[-4:]
-        for i in range(1, len(forward_sales)):
+        for i in range(len(forward_sales)):
             grow_rate = (forward_sales[i] - forward_sales[i-1]) / forward_sales[i-1]
             sales_growth_rate.append(grow_rate)
             sales.append(forward_sales[i])
@@ -311,7 +368,7 @@ class DCF(Spread):
         term_year_per = self.riskfree_rate
 
         # Iterating from first year to terminal year in descending grow order, including terminal year
-        for n in range(1, 6):
+        for n in range(1, total_half_col):
             per = stable_growth_rate - (stable_growth_rate-term_year_per)/5 * n
             sales_growth_rate.append(per)
             cur_sales = cur_sales*(1+per)
@@ -331,13 +388,13 @@ class DCF(Spread):
         for i, e in enumerate(self.forward_ebit):
             ebit_margin.append(e / sales[i])
             ebit.append(e)
-        fixed_index = len(self.forward_ebit)-1
 
+        fixed_index = len(self.forward_ebit)-1
         fixed_margin = ebit_margin[-1]
-        ebit_range = 10 - len(self.forward_ebit) + 1
-        for x in range(1, ebit_range):
+        remaining_col = total_main_col - len(self.forward_ebit)
+        for i in range(1, remaining_col):
             ebit_margin.append(fixed_margin)
-            stable_ebit = fixed_margin * sales[fixed_index+x]
+            stable_ebit = fixed_margin * sales[fixed_index+i]
             ebit.append(stable_ebit)
         ebit_margin.append(fixed_margin)
         ebit.append(fixed_margin * sales[-1])
@@ -360,10 +417,10 @@ class DCF(Spread):
 
         # Previous year tax rate + (marginal tax rate - previous year tax rate) / 5
         start_tax_rate = tax_rate = etr[-1]
-        for i in range(len(self.forward_etr), 5):
+        for i in range(len(self.forward_etr), total_half_col):
             etr.append(tax_rate)
 
-        for x in range(1, 6):
+        for x in range(1, total_half_col):
             tax_rate = tax_rate+(self.marginal_tax_rate - start_tax_rate)/5
             etr.append(tax_rate)
         etr.append(tax_rate)
@@ -378,7 +435,7 @@ class DCF(Spread):
                 nopat[-1] -= e * tax_rate[i]
 
         nopat_start = len(self.forward_ebit)
-        for i in range(nopat_start, 11):
+        for i in range(nopat_start, total_main_col):
             nopat.append(ebit[i])
             if len(tax_rate) > 0:
                 nopat[-1] -= ebit[i] * tax_rate[i]
@@ -389,12 +446,33 @@ class DCF(Spread):
         # fwd_dna = self.strip(self.estimates.match_title('Depreciation & Amortization'))
         # fwd change in working capital
 
+        # Defaulting to no lag for the time being.
+        # =IF(more_lag="No",(forward_2y_sales-forward_sales)/sales_to_cap,
+        #   IF(years_lag=0,(forward_sales-prev_sales)/sales_to_cap,
+        #   IF(years_lag=2,(forward_3y_sales-forward_2y_sales)/sales_to_cap,
+        #   IF(years_lag=3,(forward_4y_sales-forward_3y_sales)/sales_to_cap,
+        #   (forward_2y_sales-forward_sales)/sales_to_cap))))
+        # https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/capex.html
+
+        # Latest sales to book value of equity
+        sales_to_cap_source = self.sales[-1] / self.book_value_equity[-1]
+        print("Computed Sales to cap ratio {:.2f}".format(sales_to_cap_source))
+        # TODO Asia countries not in U.S. coverage
+        if True:
+            print("Probable Sales to cap ratio:")
+            matches = self.dataset.match_sales_to_cap_ratio(sales_to_cap_source)[:5]
+            heads = ['Company', 'Sales to Cap', 'Error']
+            print(tabulate(matches, headers=heads, floatfmt=".2f"), "\n")
+            # Selecting mid of the 5 matches
+            sales_to_cap_ratio = matches[2][1]
+        else:
+            sales_to_cap_ratio = sales_to_cap_source
+
         reinvestment = d['- Reinvestment'] = []
+        reinvestment.append(None)
         sales = d['Revenue']
-        for i in range(len(sales)-1):
-            # TODO Hard coded 2.5 for sales to capital ratio
-            # https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/capex.html
-            r = (sales[i+1]-sales[i])/2.5
+        for i in range(1, len(sales)-1):
+            r = (sales[i+1]-sales[i]) / sales_to_cap_ratio
             reinvestment.append(r)
 
         # Terminal growth rate / End of ROIC * End of NOPAT
@@ -404,20 +482,31 @@ class DCF(Spread):
         nopat_end = d['NOPAT'][-1]
         reinvestment.append(term_growth_rate / roic * nopat_end)
 
+        # Alternatively Sales to IC ratio = FCFF (computed by TIKR) + NOPAT
+
     def compute_fcff(self, d):
         fcff = d['FCFF'] = []
         nopat = d['NOPAT']
         reinvestment = d['- Reinvestment']
         for i in range(len(nopat)):
-            fcff.append(nopat[i]-reinvestment[i])
+            if reinvestment[i] is not None:
+                fcff.append(nopat[i]-reinvestment[i])
+            else:
+                fcff.append(None)
 
     def compute_cost_of_capital(self, d):
         # Cost of debt
-        interest_expense = self.ie[-1]
-        current_debt = self.current_debt[-1] if self.current_debt[-1] is not None else 0
-        debt = self.debt[-1] + current_debt
+        interest_expense = 0
+        if self.ie[-1] is not None:
+            interest_expense = self.ie[-1]
+
+        debt = 0
+        if self.debt[-1] is not None:
+            debt = self.debt[-1]
         # I have excluded tax rate leading to lower debt number.
-        pretax_cost_of_debt = abs(interest_expense / debt)
+        pretax_cost_of_debt = 0
+        if debt > 0:
+            pretax_cost_of_debt = abs(interest_expense / debt)
         if self.forward_etr == 0:
             cost_of_debt = pretax_cost_of_debt
         else:
@@ -436,8 +525,12 @@ class DCF(Spread):
             print("Waiting to query Yahoo Finance server with '{}'".format(initial_query))
             yf_ticker = yf.Ticker(get_symbol(initial_query))
 
-        beta = yf_ticker.info['beta']
-        print("Obtain beta:", beta)
+        if 'beta' in yf_ticker.info:
+            beta = yf_ticker.info['beta']
+            print("Obtain beta:", beta)
+        else:
+            colour_print("Invalid beta: defaulting beta to 1.0", bcolors.WARNING)
+            beta = 1.0
         mrp = self.dataset.get_equity_risk_premium()
         cost_of_equity = self.riskfree_rate + beta * mrp
         market_cap = yf_ticker.info['marketCap'] / 1e6
@@ -451,10 +544,10 @@ class DCF(Spread):
         crp = 0
         mature_market_erp = .045
         total_erp = crp + mature_market_erp
-        coc = d['Cost of capital'] = [initial_coc]*5
-        for i in range(1, 6):
+        coc = d['Cost of capital'] = [0] + [initial_coc]*5
+        for i in range(1, total_half_col):
             # Prev coc - (fixed prev coc - riskfree rate + mature market risk + country risk premium)/5
-            current_coc = coc[i-1] - (initial_coc - (self.riskfree_rate + total_erp))/5
+            current_coc = coc[i] - (initial_coc - (self.riskfree_rate + total_erp))/5
             coc.append(current_coc)
         coc.append(self.riskfree_rate + mature_market_erp)
 
@@ -463,14 +556,20 @@ class DCF(Spread):
         fcff = d['FCFF']
         cumulated_df = d['Cumulated discount factor'] = []
         pv = d['PV (FCFF)'] = []
-        for i in range(0, 10):
-            _ = 1/(1+coc[i])
+        for i in range(total_main_col-1):
+            current_coc = 0
+            if coc[i] is not None:
+                current_coc = coc[i]
+            current_df = 1/(1+current_coc)
             if len(cumulated_df) > 0:
-                _ = cumulated_df[i-1]*(1/(1+coc[i]))
-            cumulated_df.append(_)
+                current_df = cumulated_df[i-1]*(1/(1+current_coc))
+            cumulated_df.append(current_df)
 
+            current_fcff = 0
+            if fcff[i] is not None:
+                current_fcff = fcff[i]
             # fcff * df
-            pv.append(fcff[i] * cumulated_df[i])
+            pv.append(current_fcff * cumulated_df[i])
 
     def compute_terminals(self, d):
         d['empty2'] = []
@@ -509,6 +608,36 @@ class DCF(Spread):
         d['Estimated value / share'] = d['Value of equity'] / d['Number of shares']
         d['Price'] = self.strip(self.values.match_title('Price$'))[-1]
         d['Price as % of value'] = d['Price'] / d['Estimated value / share']
+
+    def compute_return_invested_capital(self, d):
+        ## Invested capital
+        # TODO =IF(operating_lease="Yes",
+        #     IF(rnd_expense_cap="Yes",
+        #        book_value_equity + book_value_debt - cash + adjust_debt_outstanding + rnd_converter,
+        #        book_value_equity + book_value_debt - cash + adjust_debt_outstanding),
+        #     IF(rnd_expense_cap="Yes",
+        #        book_value_equity + book_value_debt - cash + rnd_converter,
+        #        book_value_equity + book_value_debt - cash))
+        d['empty3'] = []
+        invested_capital = d['Invested Capital'] = []
+        book_value_debt = 0
+        if self.book_value_debt[-1] is not None:
+            book_value_debt = self.book_value_debt[-1]
+        current_ic = self.book_value_equity[-1] + book_value_debt - self.cash[-1]
+        prev_ic = []
+        reinvestment = d['- Reinvestment']
+        for i in range(total_main_col-1):
+            prev_ic.append(current_ic)
+            if reinvestment[i] is not None:
+                current_ic += reinvestment[i]
+            invested_capital.append(current_ic)
+
+        invested_return = d['ROIC'] = []
+        for i in range(total_main_col-1):
+            invested_return.append(d['NOPAT'][i] / prev_ic[i])
+
+        # TODO end of cost of capital
+        # invested_return.append(d['Cost of capital'][-1])
 
 
 class Ticks:
@@ -567,7 +696,7 @@ class Ticks:
     #     # excel.start()
 
 
-dcf = DCF('intc',)
+dcf = DCF('intc', country='United States')
 dcf.compute()
 print("XXX", dcf)
 
