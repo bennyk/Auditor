@@ -606,8 +606,12 @@ class DCF(Spread):
                                 + d['+ Cash'] + d['+ Non-operating assets'])
         d['Number of shares'] = self.shares[-1]
         d['Estimated value / share'] = d['Value of equity'] / d['Number of shares']
-        d['Price'] = self.strip(self.values.match_title('Price$'))[-1]
-        d['Price as % of value'] = d['Price'] / d['Estimated value / share']
+
+        ticker = yf.Ticker(self.tick)
+        avg_price = (ticker.info['regularMarketDayLow'] + ticker.info['regularMarketDayHigh']) / 2.
+        # d['Price'] = self.strip(self.values.match_title('Price$'))[-1]
+        d['Price'] = avg_price
+        d['Price as % of value'] = avg_price / d['Estimated value / share']
 
     def compute_return_invested_capital(self, d):
         ## Invested capital
