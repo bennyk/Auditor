@@ -249,6 +249,7 @@ class DCF(Spread):
         super().__init__(self.wb, tick)
 
         self.dataset = DataSet(country, industry)
+        self.cached_ticker = None
 
         # Revenues, Operating Income, Interest Expense, ...
 
@@ -513,18 +514,7 @@ class DCF(Spread):
             cost_of_debt = pretax_cost_of_debt * (1-average(self.forward_etr) / 100)
 
         # Cost of equity
-        ticker = self.tick
-        if re.match(r'\d{4}$', self.tick):
-            # Regex to match currency denomination express by 4 digits such as 9618.HK
-            suffix = self.dataset.get_currency_suffix(self.sticky_price)
-            ticker = ticker + '.{}'.format(suffix)
-        yf_ticker = yf.Ticker(ticker)
-        if 'beta' not in yf_ticker.info:
-            assert len(self.head) > 0
-            initial_query = ' '.join(self.head.split()[:-1])
-            print("Waiting to query Yahoo Finance server with '{}'".format(initial_query))
-            yf_ticker = yf.Ticker(get_symbol(initial_query))
-
+        yf_ticker = self.get_ticker()
         if 'beta' in yf_ticker.info:
             beta = yf_ticker.info['beta']
             print("Obtain beta:", beta)
@@ -607,11 +597,31 @@ class DCF(Spread):
         d['Number of shares'] = self.shares[-1]
         d['Estimated value / share'] = d['Value of equity'] / d['Number of shares']
 
-        ticker = yf.Ticker(self.tick)
+        ticker = self.get_ticker()
         avg_price = (ticker.info['regularMarketDayLow'] + ticker.info['regularMarketDayHigh']) / 2.
         # d['Price'] = self.strip(self.values.match_title('Price$'))[-1]
         d['Price'] = avg_price
         d['Price as % of value'] = avg_price / d['Estimated value / share']
+
+    def get_ticker(self):
+        if self.cached_ticker is None:
+            tick_name = self.tick
+            if re.match(r'\d{4}$', self.tick):
+                # Regex to match currency denomination express by 4 digits such as 9618.HK
+                suffix = self.dataset.get_currency_suffix(self.sticky_price)
+                tick_name = tick_name + '.{}'.format(suffix)
+
+            # Test the ticker by obtaining beta
+            ticker = yf.Ticker(tick_name)
+            if 'beta' not in ticker.info:
+                assert len(self.head) > 0
+                initial_query = ' '.join(self.head.split()[:-1])
+                print("Waiting to query Yahoo Finance server with '{}'".format(initial_query))
+                ticker = yf.Ticker(get_symbol(initial_query))
+            self.cached_ticker = ticker
+        else:
+            ticker = self.cached_ticker
+        return ticker
 
     def compute_return_invested_capital(self, d):
         ## Invested capital
