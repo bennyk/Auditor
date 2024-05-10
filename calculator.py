@@ -70,7 +70,7 @@ class ExcelDict:
 
     def create_array(self, key, row, style='Comma'):
         self.make_header(key, row)
-        self.array = ExcelArray(key, row, excel, style=style)
+        self.array = ExcelArray(key, row, self.excel, style=style)
         return self.array
 
     def make_header(self, header, row):
