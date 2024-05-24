@@ -1,5 +1,5 @@
 from selenium import webdriver
-from chromedriver_py import binary_path
+import chromedriver_binary
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
@@ -254,8 +254,7 @@ def run_main():
     global driver
 
     # bootstrap functions
-    options = webdriver.ChromeOptions()
-    driver = webdriver.Chrome(service=Service(executable_path=binary_path), options=options)
+    driver = webdriver.Chrome()
     session_id = driver.session_id
     executor_url = driver.command_executor._url
     # driver.get("https://app.tikr.com/stock/estimates?ref=iwd7tf")
