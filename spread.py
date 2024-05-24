@@ -79,7 +79,7 @@ class Spread:
     def share_out_filing(self) -> [float]:
         # "Total Shares Out. Filing Date" is provided in Balance Sheet which computed as fully year
         # TODO Currently it is being replace by "Weighted Average Diluted Shares Outstanding"
-        x = self.balance.match_title('Total Shares Out\.')
+        x = self.balance.match_title('Total Shares Out\\.')
         result = list(filter(None, reversed(x[self.start_prefix:])))[0]
         return result
 
