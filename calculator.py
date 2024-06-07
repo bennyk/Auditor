@@ -7,6 +7,7 @@ from collections import OrderedDict
 
 total_main_col = 12
 
+
 class ExcelWriter:
     start_col = 2
     row_margin = 1
@@ -62,33 +63,61 @@ def excel_calc(wb, cell):
                 string += ' ' + x
     return calculate(string)
 
+
 class ExcelDict:
     def __init__(self, excel: ExcelWriter):
         self.excel = excel
-        self.store = OrderedDict()
-        self.array = None
 
     def create_array(self, key, row, style='Comma'):
-        self.make_header(key, row)
-        self.array = ExcelArray(key, row, self.excel, style=style)
-        return self.array
-
-    def make_header(self, header, row):
         start_col = 1
         sheet = self.excel.sheet
         sheet.column_dimensions[colnum_string(start_col)].width = 32
         cell = sheet.cell(row=row, column=start_col)
         cell.alignment = Alignment(wrapText=True)
-        if re.match(r'empty', header):
-            pass
-        else:
-            cell.value = header
+        # TODO create array?
+        cell.value = key
+        return ExcelArray(row, self.excel, style=style)
 
+    def add_label(self, label, row):
+        sheet = self.excel.sheet
+        cell = sheet.cell(row=row, column=1)
+        cell.value = label
+
+    def get(self, key):
+        empty_count = 0
+        result = None
+        sheet = self.excel.sheet
+        for j in range(2, 99):
+            cell = sheet.cell(row=j, column=1)
+            if cell.value is None:
+                # TODO empty row tolerance
+                if empty_count > 1:
+                    break
+                empty_count += 1
+            else:
+                if key == cell.value:
+                    result = ExcelArray(j, self.excel)
+                    break
+        return result
     # Skipping accessors: getitem, setitem, delitem, iter, len
 
+    def set(self, key, val, row, style='Comma'):
+        sheet = self.excel.sheet
+        cell = sheet.cell(row=row, column=1)
+        cell.value = key
+
+        cell = sheet.cell(row=row, column=2)
+        cell.value = '={}'.format(val)
+        cell.style = style
+        if cell.style == 'Percent':
+            cell.number_format = '0.00%'
+        else:
+            cell.number_format = '#,0.00'
+        cell.font = Font(name='Calibri', size=11)
+
+
 class ExcelArray:
-    def __init__(self, key, row: int, excel: ExcelWriter, style: str='Comma'):
-        self.key = key
+    def __init__(self, row: int, excel: ExcelWriter, style: str='Comma'):
         self.excel = excel
         self.style = style
 
@@ -96,9 +125,6 @@ class ExcelArray:
         self.j = row
 
     def append(self, val):
-        self.make_cell(val)
-
-    def make_cell(self, val):
         sheet = self.excel.sheet
         cell = sheet.cell(row=self.j, column=self.i)
         sheet.column_dimensions[colnum_string(self.i)].width = 11
@@ -124,6 +150,23 @@ class ExcelArray:
             assert False
         cell.font = self.excel.ft
         self.i += 1
+
+    # TODO Need to remove hardcode numbers 3, 12 and 13
+    def last(self):
+        return "{}{}".format(colnum_string(13), self.j)
+
+    def last2(self):
+        return "{}{}".format(colnum_string(12), self.j)
+
+    def value(self):
+        return "{}{}".format(colnum_string(self.i), self.j)
+
+    def start(self):
+        return colnum_string(3)
+
+    def end(self):
+        return colnum_string(12)
+
 
 class Calculator(object):
     # https://gist.github.com/maxkibble/1f0b4de51576ae75356c6a61b7aa1544
@@ -177,22 +220,3 @@ class Calculator(object):
 def calculate(string):
     calc = Calculator()
     return calc.evaluate(string)
-
-
-# excel = ExcelWriter('intc')
-# d = excel.create_dict()
-# sales_growth_rate = d.create_array('Revenue growth rate', 2, style='Percent')
-# sales = d.create_array('Revenue', 3)
-# # sales_growth_rate = d['Revenue growth rate'] = []
-# # sales = d['Revenue'] = []
-# forward_sales = [54228.00, 56056.45, 63081.10, 69923.58]
-# for i in range(len(forward_sales)):
-#     # grow_rate = (forward_sales[i] - forward_sales[i-1]) / forward_sales[i-1]
-#     if i != 0:
-#         grow_rate_cell = "=({}{col}-{}{col})/{}{col}".format(
-#             colnum_string(i+2), colnum_string(i+1), colnum_string(i+1), col=3)
-#         sales_growth_rate.append(grow_rate_cell)
-#     else:
-#         sales_growth_rate.append(0)
-#     sales.append(forward_sales[i])
-# excel.wb.save('aaa.xlsx')
