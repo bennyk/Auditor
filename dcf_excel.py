@@ -9,12 +9,40 @@ from openpyxl import Workbook, load_workbook, worksheet
 from openpyxl.styles import Font, Alignment
 from collections import OrderedDict
 from typing import List
+from enum import IntEnum
 import yfinance as yf
 from tabulate import tabulate
 from calculator import ExcelWriter
 
 total_main_col = 12
-total_half_col = int(total_main_col/2)
+total_half_col = int(total_main_col / 2)
+total_elem = 10
+total_half_elem = int(total_elem / 2)
+prev_year_offset = 1
+start_year_offset = 2
+next_year_offset = 3
+half_base_offset = total_half_elem + 2
+
+
+class RowIndex(IntEnum):
+    """Excel row index"""
+    sales_growth_rate = 2
+    sales = 3
+    ebit_margin = 4
+    ebit = 5
+    tax_rate = 6
+    nopat = 7
+    reinvestment = 8
+    fcff = 9
+    # 10: empty row
+    cost_of_capital = 11
+    cumulated_df = 12
+    pv = 13
+    end_of_roll_number = 14
+
+    returns = 32
+    invested_capital = 33
+    roic = 34
 
 
 class DataSet:
@@ -71,7 +99,7 @@ class DataSet:
         ws = wb['Sheet1']
         for i in range(8, ws.max_row):
             if re.match(self.country, ws['A{}'.format(i)].value):
-                result = ws.cell(row=i, column=5).value
+                result = ws.cell(row=i, column=total_half_elem).value
                 break
         assert result is not None
         return result
@@ -171,7 +199,7 @@ class DCF(Spread):
         self.current_debt = [0.]
         current_debt_not_strip = self.balance.match_title('Current Portion of Long-Term Debt', none_is_optional=True)
         if current_debt_not_strip is not None:
-           self.current_debt = self.strip(current_debt_not_strip)
+            self.current_debt = self.strip(current_debt_not_strip)
         self.debt = self.strip(self.balance.match_title('Total Debt'))
 
         cash_not_strip = self.balance.match_title('Total Cash', none_is_optional=True)
@@ -222,7 +250,6 @@ class DCF(Spread):
         return result
 
     def compute(self):
-        # d = OrderedDict()
         d = self.excel.create_dict()
         self.compute_revenue(d)
         self.compute_ebit(d)
@@ -230,7 +257,6 @@ class DCF(Spread):
         self.compute_ebt(d)
         self.compute_reinvestment(d)
         self.compute_fcff(d)
-        # d['empty1'] = []
         self.compute_cost_of_capital(d)
         self.compute_cumulative_df(d)
         self.compute_terminals(d)
@@ -242,110 +268,96 @@ class DCF(Spread):
         # Compute past
         # Compute forward forecast
 
-        sales_grate_row = 2
-        sales_growth_rate = d.create_array('Revenue growth rate', sales_grate_row, style='Percent')
-        sales = d.create_array('Revenue', 3)
-        forward_sales = self.forward_sales[-4:]
+        sales_growth_rate = d.create_array('Revenue growth rate', RowIndex.sales_growth_rate, style='Percent')
+        sales = d.create_array('Revenue', RowIndex.sales)
+        forward_sales = self.forward_sales
+        forward_end = len(self.forward_sales)+1
         for i in range(len(forward_sales)):
-            # grow_rate = (forward_sales[i] - forward_sales[i-1]) / forward_sales[i-1]
             if i != 0:
-                grow_rate_cell = "=({}{row}-{}{row})/{}{row}".format(
-                    colnum_string(i+2), colnum_string(i+1), colnum_string(i+1), row=3)
+                grow_rate_cell = ("=({start_year}{sales_row} - {prev_year}{sales_row})"
+                                  "/ {prev_year}{sales_row}").format(
+                    start_year=colnum_string(i+start_year_offset),
+                    prev_year=colnum_string(i+prev_year_offset),
+                    sales_row=RowIndex.sales)
                 sales_growth_rate.append(grow_rate_cell)
             else:
                 sales_growth_rate.append(0)
             sales.append(forward_sales[i])
 
         # Stable at year 2, 3 (optional here after), 4 and 5
-        # stable_growth_rate = sales_growth_rate[-1]
-        # current_sales = forward_sales[-1] * (1+stable_growth_rate)
         stable_growth_rate = "={}{row}".format(
-            colnum_string(len(forward_sales)+1), row=sales_grate_row)
+            colnum_string(forward_end), row=RowIndex.sales_growth_rate)
         current_sales = "={}{sales_row}*(1+{}{sales_grate_row})".format(
-            colnum_string(len(forward_sales)+1), colnum_string(len(forward_sales)+2),
-            sales_row=3, sales_grate_row=sales_grate_row)
-        for i in range(len(forward_sales)-1, 5):
+            colnum_string(forward_end),
+            colnum_string(len(forward_sales)+start_year_offset),
+            sales_row=RowIndex.sales, sales_grate_row=RowIndex.sales_growth_rate)
+        for i in range(len(forward_sales)-1, forward_end):
             sales_growth_rate.append(stable_growth_rate)
             stable_growth_rate = "={}{row}".format(
-                colnum_string(len(forward_sales)+1), row=sales_grate_row)
+                colnum_string(forward_end), row=RowIndex.sales_growth_rate)
             sales.append(current_sales)
-            if i < 4:
+            if i < forward_end:
                 # Otherwise, ignore the last loop
                 current_sales = "={}{sales_row}*(1+{}{sales_grate_row})".format(
-                    colnum_string(len(forward_sales)+i-1), colnum_string(len(forward_sales)+i),
-                    sales_row=3, sales_grate_row=sales_grate_row)
-                # current_sales = current_sales * (1+stable_growth_rate)
+                    colnum_string(len(forward_sales)+i-1),
+                    colnum_string(len(forward_sales)+i),
+                    sales_row=RowIndex.sales, sales_grate_row=RowIndex.sales_growth_rate)
 
-        # Terminal year period is based on current risk free rate based on 10 years treasury bond note yield
+        # Terminal year period is based on current riskfree rate based on 10 years treasury bond note yield
         term_year_per = self.riskfree_rate
 
         # Iterating from first year to terminal year in descending grow order, including terminal year
         for n in range(1, total_half_col):
-            # per = stable_growth_rate - (stable_growth_rate-term_year_per)/5 * n
-            per = "={fwd_sales_plus1}{row} - ({fwd_sales_plus1}{row}-{term_year_per})/5 * {n}".format(
-                fwd_sales_plus1=colnum_string(6+n), n=n,
-                row=sales_grate_row, term_year_per=term_year_per)
+            per = "={fwd_sales_plus1}{row} - ({fwd_sales_plus1}{row}-{term_year_per})/{half_elem} * {n}".format(
+                fwd_sales_plus1=colnum_string(total_half_col+n), n=n,
+                row=RowIndex.sales_growth_rate, term_year_per=term_year_per, half_elem=total_half_elem)
             sales_growth_rate.append(per)
-            # current_sales = current_sales*(1+per)
             current_sales = "={}{sales_row}*(1+{}{sales_grate_row})".format(
-                colnum_string(6+n), colnum_string(7+n),
-                sales_row=3, sales_grate_row=sales_grate_row)
+                colnum_string(total_half_col + n), colnum_string(half_base_offset+n),
+                sales_row=RowIndex.sales, sales_grate_row=RowIndex.sales_growth_rate)
             sales.append(current_sales)
 
         # Terminal period, no grow and stagnated value
-        per = "={fwd_sales_plus1}{row} - ({fwd_sales_plus1}{row}-{term_year_per})/5 * 5".format(
-            fwd_sales_plus1=colnum_string(12),
-            row=sales_grate_row, term_year_per=term_year_per)
-        # per = stable_growth_rate - (stable_growth_rate-term_year_per)/5 * 5
+        per = "={fwd_sales_plus1}{row} - ({fwd_sales_plus1}{row}-{term_year_per})/{half_elem} * {half_elem}".format(
+            fwd_sales_plus1=colnum_string(total_main_col),
+            row=RowIndex.sales_growth_rate, term_year_per=term_year_per, half_elem=total_half_elem)
         sales_growth_rate.append(per)
-        # current_sales = current_sales * (1 + per)
         current_sales = "={}{sales_row}*(1+{}{sales_grate_row})".format(
-            colnum_string(12), colnum_string(13),
-            sales_row=3, sales_grate_row=sales_grate_row)
+            colnum_string(total_main_col), colnum_string(total_main_col+1),
+            sales_row=RowIndex.sales, sales_grate_row=RowIndex.sales_growth_rate)
         sales.append(current_sales)
-        pass
 
     def compute_ebit(self, d):
-        # sales = d['Revenue']
-        sales_row = 3
-        ebit_margin_row = 4
-        ebit_row = 5
-        ebit_margin = d.create_array('EBIT margin', ebit_margin_row, style='Percent')
-        ebit = d.create_array('EBIT', ebit_row)
+        ebit_margin = d.create_array('EBIT margin', RowIndex.ebit_margin, style='Percent')
+        ebit = d.create_array('EBIT', RowIndex.ebit)
 
         for i, e in enumerate(self.forward_ebit):
-            margin_template = "={}{ebit_row} / {}{sales_row}".format(
-                colnum_string(i+2), colnum_string(i+2),
-                ebit_row=ebit_row, sales_row=sales_row
+            margin_template = "={start_year}{ebit_row} / {start_year}{sales_row}".format(
+                start_year=colnum_string(i+start_year_offset),
+                ebit_row=RowIndex.ebit, sales_row=RowIndex.sales
             )
-            # ebit_margin.append(e / sales[i])
             ebit_margin.append(margin_template)
             ebit.append(e)
 
-        fixed_index = len(self.forward_ebit)-1
-        # fixed_margin = ebit_margin[-1]
         fixed_margin = '={}{ebit_margin_row}'.format(
-            colnum_string(5), ebit_margin_row=ebit_margin_row)
+            colnum_string(total_half_col-1), ebit_margin_row=RowIndex.ebit_margin)
         remaining_col = total_main_col - len(self.forward_ebit)
         for i in range(1, remaining_col):
             ebit_margin.append(fixed_margin)
-            # stable_ebit = fixed_margin * sales[fixed_index+i]
             stable_ebit = "={col}{ebit_margin_row}*{col}{sales_row}".format(
-                col=colnum_string(i+5), ebit_margin_row=ebit_margin_row, sales_row=sales_row
+                col=colnum_string(i+total_half_col-1),
+                ebit_margin_row=RowIndex.ebit_margin, sales_row=RowIndex.sales
             )
             ebit.append(stable_ebit)
         ebit_margin.append(fixed_margin)
-        # ebit.append(fixed_margin * sales[-1])
         ebit_formula = "={col}{ebit_margin_row}*{col}{sales_row}".format(
-            ebit_margin_row=ebit_margin_row, sales_row=sales_row,
-            col=colnum_string(13))
+            ebit_margin_row=RowIndex.ebit_margin, sales_row=RowIndex.sales,
+            col=colnum_string(total_main_col + 1))
         ebit.append(ebit_formula)
 
     def compute_tax(self, d):
-        tax_row = 6
-        tax_col = colnum_string(7)
-        # etr = d['Tax rate'] = []
-        etr = d.create_array('Tax rate', tax_row, style='Percent')
+        tax_col = colnum_string(half_base_offset)
+        etr = d.create_array('Tax rate', RowIndex.tax_rate, style='Percent')
         if self.forward_etr == 0:
             colour_print("Is \"{}\" a REIT company?"
                          " REIT company distributes at least 90% of its total yearly income to unit holders, the REIT itself is exempt from tax for that year, but unit holders are taxed on the distribution of income"
@@ -360,49 +372,34 @@ class DCF(Spread):
                 # TODO: Invalid ETR
                 etr.append(0)
 
-        # Previous year tax rate + (marginal tax rate - previous year tax rate) / 5
-        # start_tax_rate = tax_rate = etr[-1]
-        start_tax_rate = "{}{}".format(colnum_string(i+2), tax_row)
+        start_tax_rate = "{}{}".format(colnum_string(i+start_year_offset), RowIndex.tax_rate)
         for i in range(len(self.forward_etr), total_half_col):
-            # etr.append(tax_rate)
             etr.append("={}".format(start_tax_rate))
 
-        tax_cell = "${}${}".format(tax_col, tax_row)
+        # Previous year tax rate + (marginal tax rate - previous year tax rate) / 5
+        tax_cell = "${tax_col}${tax_rate}".format(tax_col=tax_col, tax_rate=RowIndex.tax_rate)
         for i in range(1, total_half_col):
-            tax_rate_cell = "={}{}+({}-{})/5".format(
-                colnum_string(i+6), tax_row, self.marginal_tax_rate, tax_cell)
-            # tax_rate = tax_rate+(self.marginal_tax_rate - start_tax_rate)/5
-            # etr.append(tax_rate)
+            tax_rate_cell = "={half_col}{tax_rate}+({marginal_tax_rate}-{tax_cell})/{half_elem}".format(
+                half_col=colnum_string(i + total_half_col), tax_rate=RowIndex.tax_rate,
+                marginal_tax_rate=self.marginal_tax_rate, tax_cell=tax_cell, half_elem=total_half_elem)
             etr.append(tax_rate_cell)
-        # etr.append(tax_rate)
-        tax_rate_cell = "={}{}".format(colnum_string(i+7), tax_row)
+        tax_rate_cell = "={}{}".format(colnum_string(i+half_base_offset), RowIndex.tax_rate)
         etr.append(tax_rate_cell)
 
     def compute_ebt(self, d):
-        nopat_row = 7
-        nopat = d.create_array('NOPAT', nopat_row)
-        ebit_row = 5
-        tax_row = 6
-        # ebit = d['EBIT']
-        # tax_rate = d['Tax rate']
-        # nopat = d['NOPAT'] = []
-        # for i, e in enumerate(self.forward_ebit):
-        #     nopat.append(e)
-        #     if len(tax_rate) > 0:
-        #         nopat[-1] -= e * tax_rate[i]
+        nopat = d.create_array('NOPAT', RowIndex.nopat)
         for i in range(len(self.forward_ebit)):
-            nopat_cell = "={}{}*(1-{}{})".format(colnum_string(i+2), ebit_row,  colnum_string(i+2), tax_row)
+            nopat_cell = ("={start_year_offset}{ebit_index}"
+                          "*(1-{start_year_offset}{tax_rate_index})").format(
+                start_year_offset=colnum_string(i+start_year_offset),
+                ebit_index=RowIndex.ebit, tax_rate_index=RowIndex.tax_rate)
             nopat.append(nopat_cell)
-
-        # nopat_start = len(self.forward_ebit)
-        # for i in range(nopat_start, total_main_col):
-        #     nopat.append(ebit[i])
-        #     if len(tax_rate) > 0:
-        #         nopat[-1] -= ebit[i] * tax_rate[i]
 
         nopat_start = len(self.forward_ebit)
         for i in range(nopat_start, total_main_col):
-            nopat_cell = "={}{}*(1-{}{})".format(colnum_string(i + 2), ebit_row, colnum_string(i + 2), tax_row)
+            nopat_cell = "={start_year}{ebit_index}*(1-{start_year}{tax_rate_index})".format(
+                start_year=colnum_string(i+start_year_offset),
+                ebit_index=RowIndex.ebit, tax_rate_index=RowIndex.tax_rate)
             nopat.append(nopat_cell)
 
     def compute_reinvestment(self, d):
@@ -425,7 +422,7 @@ class DCF(Spread):
         # TODO Asia countries not in U.S. coverage
         if True:
             print("Probable Sales to cap ratio:")
-            matches = self.dataset.match_sales_to_cap_ratio(sales_to_cap_source)[:5]
+            matches = self.dataset.match_sales_to_cap_ratio(sales_to_cap_source)[:total_half_elem]
             heads = ['Company', 'Sales to Cap', 'Error']
             print(tabulate(matches, headers=heads, floatfmt=".2f"), "\n")
             # Selecting mid of the 5 matches
@@ -433,56 +430,34 @@ class DCF(Spread):
         else:
             sales_to_cap_ratio = sales_to_cap_source
 
-        sales_row = 3
-        reinvest_row = 8
-        reinvestment = d.create_array('- Reinvestment', reinvest_row)
-        # reinvestment = d['- Reinvestment'] = []
+        reinvestment = d.create_array('- Reinvestment', RowIndex.reinvestment)
         reinvestment.append(None)
-        # sales = d['Revenue']
-        # for i in range(1, len(sales)-1):
-        for i in range(1, 11):
-            # r = (sales[i+1]-sales[i]) / sales_to_cap_ratio
-            r = "=({}{}-{}{})/{}".format(
-                colnum_string(i+3), sales_row, colnum_string(i+2), sales_row, sales_to_cap_source)
+        elem_end = total_elem + 1
+        for i in range(1, elem_end):
+            r = "=({next_year}{sales}-{start_year}{sales})/{sales_to_cap_ratio}".format(
+                next_year=colnum_string(i+next_year_offset), sales=RowIndex.sales,
+                start_year=colnum_string(i+start_year_offset), sales_to_cap_ratio=sales_to_cap_ratio)
             reinvestment.append(r)
-        # self.excel.wb.save('aaa.xlsx')
-        # exit()
 
         # Terminal growth rate / End of ROIC * End of NOPAT
         term_growth_rate = "{}".format(d.get('Revenue growth rate').last())
-        # term_growth_rate = d['Revenue growth rate'][-1]
         # TODO Cost of capital at year 10 or enter manually
         roic = .15
-        # nopat_end = d['NOPAT'][-1]
-        # nopat_end = d.get('NOPAT').last()
-        terminal_col = 13
-        nopat_row = 7
-        nopat_cell = '{}{}'.format(colnum_string(terminal_col), nopat_row)
-        # current_re = d.concat('{} / {} * {}'.format(term_growth_rate, roic, nopat_cell))
-        # reinvestment.append(term_growth_rate / roic * nopat_end)
-        reinvestment.append('={}/{} * {}'.format(term_growth_rate, roic, nopat_cell))
+        terminal_col = total_main_col+1
+        nopat_cell = '{term_col}{nopat}'.format(term_col=colnum_string(terminal_col), nopat=RowIndex.nopat)
+        reinvestment.append('={term_grate}/{roic} * {nopat}'.format(
+            term_grate=term_growth_rate, roic=roic, nopat=nopat_cell))
 
         # Alternatively Sales to IC ratio = FCFF (computed by TIKR) + NOPAT
 
     def compute_fcff(self, d):
-        fcff_row = 9
-        fcff = d.create_array('FCFF', fcff_row)
-        nopat_row = 7
-        reinvestment_row = 8
+        fcff = d.create_array('FCFF', RowIndex.fcff)
         fcff.append(None)
-        for i in range(2, 13):
-            fcff_cell = "={}{}-{}{}".format(
-                colnum_string(i+1), nopat_row, colnum_string(i+1), reinvestment_row)
+        for i in range(2, total_main_col+1):
+            fcff_cell = "={prev_year}{nopat}-{prev_year}{reinvest}".format(
+                nopat=RowIndex.nopat, reinvest=RowIndex.reinvestment,
+                prev_year=colnum_string(i+prev_year_offset))
             fcff.append(fcff_cell)
-
-        # fcff = d['FCFF'] = []
-        # nopat = d['NOPAT']
-        # reinvestment = d['- Reinvestment']
-        # for i in range(len(nopat)):
-        #     if reinvestment[i] is not None:
-        #         fcff.append(nopat[i]-reinvestment[i])
-        #     else:
-        #         fcff.append(None)
 
     def compute_cost_of_capital(self, d):
         # Cost of debt
@@ -500,8 +475,9 @@ class DCF(Spread):
         if self.forward_etr == 0:
             cost_of_debt_formula = pretax_cost_of_debt
         else:
-            cost_of_debt_formula = "{}*(1-{}/100)".format(
-                pretax_cost_of_debt, average(self.forward_etr))
+            cost_of_debt_formula = "{pretax_cost_of_debt}*(1-{avg_etr}/100)".format(
+                pretax_cost_of_debt=pretax_cost_of_debt,
+                avg_etr=average(self.forward_etr))
 
         # Cost of equity
         yf_ticker = self.get_ticker()
@@ -512,75 +488,60 @@ class DCF(Spread):
             colour_print("Invalid beta: defaulting beta to 1.0", bcolors.WARNING)
             beta = 1.0
         mrp = self.dataset.get_equity_risk_premium()
-        # cost_of_equity = self.riskfree_rate + beta * mrp
-        cost_of_equity_formula = "({}+{}*{})".format(self.riskfree_rate, beta, mrp)
+        cost_of_equity_formula = "({riskfree_rate}+{beta}*{mrp})".format(
+            riskfree_rate=self.riskfree_rate, beta=beta, mrp=mrp)
 
         market_cap = yf_ticker.info['marketCap'] / 1e6
-        # total_cap = market_cap + debt
-        # initial_coc = market_cap/total_cap * cost_of_equity + debt/total_cap * cost_of_debt
-        total_cap_formula = "{}+{}".format(market_cap, debt)
-        initial_coc_formula = "{}/({})*{} + {}/({})*{}".format(
-            market_cap, total_cap_formula, cost_of_equity_formula,
-            debt, total_cap_formula, cost_of_debt_formula)
+        total_cap_formula = "{market_cap}+{debt}".format(market_cap=market_cap, debt=debt)
+        initial_coc_formula = ("{market_cap}/({total_cap})*{cost_of_equity}"
+                               "+ {debt}/({total_cap})*{cost_of_debt}").format(
+            market_cap=market_cap, debt=debt, total_cap=total_cap_formula,
+            cost_of_equity=cost_of_equity_formula, cost_of_debt=cost_of_debt_formula)
 
         # Mature market ERP set to 4.5% and 0% based on U.S. CRP (Country risk premium)
         # https://www.youtube.com/watch?v=kyKfJ_7-mdg
         # https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/ctryprem.html
         crp = 0
         mature_market_erp = .045
-        coc_row = 11
-        coc = d.create_array('Cost of capital', coc_row, style="Percent")
+        coc = d.create_array('Cost of capital', RowIndex.cost_of_capital, style="Percent")
         coc.append(None)
         coc.append("={}".format(initial_coc_formula))
-        for j in range(1, 5):
-            coc.append("={}{}".format(colnum_string(j+2), coc_row))
-        # coc = d['Cost of capital'] = [0] + [initial_coc]*5
-        last_coc = "${}${}".format(colnum_string(j+3), coc_row)
+        for j in range(1, total_half_elem):
+            coc.append("={start_year}{cost_of_capital}".format(start_year=colnum_string(j + start_year_offset),
+                                                               cost_of_capital=RowIndex.cost_of_capital))
 
+        prev_coc = "${half_base_offset}${cost_of_capital}".format(
+            half_base_offset=colnum_string(half_base_offset), cost_of_capital=RowIndex.cost_of_capital)
         total_erp = crp + mature_market_erp
         for i in range(1, total_half_col):
             # Prev coc - (fixed prev coc - riskfree rate + mature market risk + country risk premium)/5
-            # current_coc = coc[i] - (initial_coc - (self.riskfree_rate + total_erp))/5
-            current_coc = "={} - ({}-({}+{}))/5".format(last_coc, initial_coc_formula, self.riskfree_rate, total_erp)
+            current_coc = "={prev_coc} - ({init_coc}-({riskfree_rate}+{erp}))/{half_elem}".format(
+                prev_coc=prev_coc, init_coc=initial_coc_formula,
+                riskfree_rate=self.riskfree_rate, erp=total_erp, half_elem=total_half_elem)
             coc.append(current_coc)
-        coc.append("={}+{}".format(self.riskfree_rate, mature_market_erp))
+        coc.append("={riskfree_rate}+{mature_market_erp}".format(riskfree_rate=self.riskfree_rate,
+                                                                 mature_market_erp=mature_market_erp))
 
     def compute_cumulative_df(self, d):
-        coc_row = 11
-        fcff_row = 9
-        # coc = d['Cost of capital']
-        # fcff = d['FCFF']
-        # cumulated_df = d['Cumulated discount factor'] = []
-        # pv = d['PV (FCFF)'] = []
-        cumulated_df_row = 12
-        pv_row = 13
-        cumulated_df = d.create_array('Cumulated discount factor', cumulated_df_row)
+        cumulated_df = d.create_array('Cumulated discount factor', RowIndex.cumulated_df)
         cumulated_df.append(1.0)
-        pv = d.create_array('PV (FCFF)', pv_row)
+        pv = d.create_array('PV (FCFF)', RowIndex.pv)
         pv.append(None)
-        for i in range(total_main_col-2):
-            current_coc = 0
-            # if coc[i] is not None:
-            #     current_coc = coc[i]
-            # current_df = 1/(1+current_coc)
-            # if len(cumulated_df) > 0:
-            #     current_df = cumulated_df[i-1]*(1/(1+current_coc))
-            current_df = "={}{}*1/(1+{}{})".format(
-                colnum_string(i+2), cumulated_df_row, colnum_string(i+3), coc_row)
+        for i in range(total_main_col - 2):
+            current_df = "={start_year}{cumulated_df}*1/(1+{next_year}{cost_of_capital})".format(
+                start_year=colnum_string(i+start_year_offset),
+                cumulated_df=RowIndex.cumulated_df,
+                next_year=colnum_string(i+next_year_offset),
+                cost_of_capital=RowIndex.cost_of_capital)
             cumulated_df.append(current_df)
 
-            current_fcff = "={}{}*{}{}".format(
-                colnum_string(i+3), fcff_row, colnum_string(i+3), cumulated_df_row)
+            current_fcff = "={next_year}{fcff}*{next_year}{cumulated_df}".format(
+                next_year=colnum_string(i+next_year_offset), fcff=RowIndex.fcff,
+                cumulated_df=RowIndex.cumulated_df)
             pv.append(current_fcff)
-            #
-            # current_fcff = 0
-            # if fcff[i] is not None:
-            #     current_fcff = fcff[i]
-            # # fcff * df
-            # pv.append(current_fcff * cumulated_df[i])
 
     def compute_terminals(self, d):
-        roll_number = 14
+        roll_number = RowIndex.end_of_roll_number
 
         def add_rollng_number():
             nonlocal roll_number
@@ -590,25 +551,26 @@ class DCF(Spread):
         d.set('Terminal cash flow', d.get('FCFF').last(), add_rollng_number())
         d.set('Terminal cost of capital', d.get('Cost of capital').last(), add_rollng_number(), style='Percent')
         d.set('Terminal value',
-              "{}/({}-{})".format(
-                  d.get('Terminal cash flow').value(),
-                  d.get('Terminal cost of capital').value(),
-                  d.get('Revenue growth rate').last()),
+              "{term_cash_flow}/({term_cost_of_capital}-{last_sales_grate})".format(
+                  term_cash_flow=d.get('Terminal cash flow').value(),
+                  term_cost_of_capital=d.get('Terminal cost of capital').value(),
+                  last_sales_grate=d.get('Revenue growth rate').last()),
               add_rollng_number())
         d.set('PV (Terminal value)',
-              "{}*{}".format(
-                  d.get('Terminal value').value(), d.get('Cumulated discount factor').last2()),
+              "{term_value}*{cumulated_df}".format(
+                  term_value=d.get('Terminal value').value(),
+                  cumulated_df=d.get('Cumulated discount factor').last2()),
               add_rollng_number())
 
         mark = 'PV (FCFF)'
         d.set('PV (Cash flow over next 10 years)', "SUM({start}{row}:{end}{row})".format(
-           start=d.get(mark).start(), end=d.get(mark).end(), row=d.get(mark).j), add_rollng_number())
+            start=d.get(mark).start(), end=d.get(mark).end(), row=d.get(mark).j), add_rollng_number())
 
-        d.set('Sum of PV', "{}+{}".format(
-            d.get('PV (Terminal value)').value(), d.get('PV (Cash flow over next 10 years)').value()), add_rollng_number())
+        d.set('Sum of PV', "{pv_term_value}+{pv_next_10_years}".format(
+            pv_term_value=d.get('PV (Terminal value)').value(),
+            pv_next_10_years=d.get('PV (Cash flow over next 10 years)').value()), add_rollng_number())
 
-        d.set('Value of operating assets', "{}".format(
-            d.get('Sum of PV').value()), add_rollng_number())
+        d.set('Value of operating assets', "{}".format(d.get('Sum of PV').value()), add_rollng_number())
 
         debt = 0
         if self.debt[-1] is not None:
@@ -629,23 +591,27 @@ class DCF(Spread):
                 non_op = self.investments[-2]
         d.set('+ Non-operating assets', "{}".format(non_op), add_rollng_number())
 
-        d.set('Value of equity', "{}-{}-{}+{}+{}".format(
-            d.get('Value of operating assets').value(),
-            d.get('- Debt').value(),
-            d.get('- Minority interest').value(),
-            d.get('+ Cash').value(),
-            d.get('+ Non-operating assets').value(),
-        ), add_rollng_number())
+        d.set('Value of equity',
+              "{value_of_equity} - {debt} - {minority_interest} + {cash} + {non_op_asset}".format(
+                  value_of_equity=d.get('Value of operating assets').value(),
+                  debt=d.get('- Debt').value(),
+                  minority_interest=d.get('- Minority interest').value(),
+                  cash=d.get('+ Cash').value(),
+                  non_op_asset=d.get('+ Non-operating assets').value()),
+              add_rollng_number())
 
         d.set('Number of shares', self.shares[-1], add_rollng_number())
-        d.set('Estimated value / share', "{}/{}".format(
-            d.get('Value of equity').value(), d.get('Number of shares').value()), add_rollng_number())
+        d.set('Estimated value / share', "{value_of_equity}/{num_shares}".format(
+            value_of_equity=d.get('Value of equity').value(),
+            num_shares=d.get('Number of shares').value()), add_rollng_number())
 
         ticker = self.get_ticker()
         avg_price = (ticker.info['regularMarketDayLow'] + ticker.info['regularMarketDayHigh']) / 2.
         d.set('Price', avg_price, add_rollng_number())
-        d.set('Price as % of value', "{}/{}".format(
-            d.get('Price').value(), d.get('Estimated value / share').value()), add_rollng_number(), style='Percent')
+        d.set('Price as % of value', "{price}/{value_per_share}".format(
+            price=d.get('Price').value(),
+            value_per_share=d.get('Estimated value / share').value()),
+              add_rollng_number(), style='Percent')
 
     def get_ticker(self):
         if self.cached_ticker is None:
@@ -676,100 +642,36 @@ class DCF(Spread):
         #     IF(rnd_expense_cap="Yes",
         #        book_value_equity + book_value_debt - cash + rnd_converter,
         #        book_value_equity + book_value_debt - cash))
-        # d['empty3'] = []
-        # invested_capital = d['Invested Capital'] = []
-        d.add_label('Return', 32)
-        row = 33
-        invested_capital = d.create_array('Invested Capital', row,)
+        d.add_label('Return', RowIndex.returns)
+        invested_capital = d.create_array('Invested Capital', RowIndex.invested_capital)
         book_value_debt = 0
         if self.book_value_debt[-1] is not None:
             book_value_debt = self.book_value_debt[-1]
         current_ic = self.book_value_equity[-1] + book_value_debt - self.cash[-1]
         prev_ic = []
-        # reinvestment = d['- Reinvestment']
         reinvestment = d.get('- Reinvestment')
-        reinvestment_row = 8
         prev_ic.append(reinvestment.value())
         invested_capital.append(current_ic)
         for i in range(total_main_col-1):
-            # prev_ic.append(current_ic)
-            # if reinvestment[i] is not None:
-            # current_ic += reinvestment[i]
-            current_ic = '={}{}+{}{}'.format(
-                colnum_string(i+2), row, colnum_string(i+3), reinvestment_row)
+            current_ic = '={start_year}{invested_cap}+{next_year}{reinvestment}'.format(
+                start_year=colnum_string(i+start_year_offset),
+                invested_cap=RowIndex.invested_capital,
+                next_year=colnum_string(i+next_year_offset),
+                reinvestment=RowIndex.reinvestment)
             invested_capital.append(current_ic)
 
-        # invested_return = d['ROIC'] = []
-        nopat_row = 7
-        invested_return = d.create_array('ROIC', row+1, style='Percent')
+        invested_return = d.create_array('ROIC', RowIndex.roic, style='Percent')
         invested_return.append(None)
         for i in range(1, total_main_col):
-            if (i+1) > 1:
-                invested_return.append("={}{} / {}{}".format(
-                    colnum_string(i+2), nopat_row,
-                    colnum_string(i+1), row))
-            # invested_return.append(d['NOPAT'][i] / prev_ic[i])
+            if (i+prev_year_offset) > 1:
+                invested_return.append("={start_year}{nopat} / {prev_year}{invested_cap}".format(
+                    start_year=colnum_string(i+start_year_offset),
+                    nopat=RowIndex.nopat,
+                    prev_year=colnum_string(i+prev_year_offset),
+                    invested_cap=RowIndex.invested_capital))
 
         # TODO end of cost of capital
         # invested_return.append(d['Cost of capital'][-1])
-        # self.excel.wb.save('aaa.xlsx')
-        # exit()
-
-
-class Ticks:
-    pass
-    # def __init__(self, ticks, path):
-    #     self.tickers = ticks
-    #     self.path = path
-    #     self.modes = [
-    #         Mode.Last_FCF,
-    #         Mode.Avg_FCF,
-    #         Mode.UFCF_5x,
-    #         Mode.UFCF_8x,
-    #     ]
-    #
-    #     # type: List[DCF]
-    #     self.spreads = []
-    #     for t in ticks:
-    #         self.spreads.append(DCF(t, self.path, self.modes))
-    #
-    # def compute(self):
-    #     for sp in self.spreads:
-    #         sp.compute_fcf()
-    #
-    # def summarize(self):
-    #     # https://blog.devgenius.io/how-to-easily-print-and-format-tables-in-python-18bbe2e59f5f
-    #     # summarize to TV based on last FCF, avg FCF, multiple of NOPAT
-    #
-    #     # Set the first word as the header for our spreadsheet optionally.
-    #     a = list(map(lambda x: [x.short_name() if x.head is not None else x.head,
-    #                             x.tick, x.last_price], self.spreads))
-    #     for i, s in enumerate(self.spreads):
-    #         for j in range(len(s.sum_pvtv)):
-    #             # extend the spread with sum_pvtv and poss ratio
-    #             a[i].append(s.sum_pvtv[j])
-    #             a[i].append(s.poss_ratio[j])
-    #
-    #     # Sort it to the last column which is 'Possible' ratio
-    #     entries = sorted(a, key=lambda x: x[len(a[0])-1])
-    #     poss_header = 'Poss. x'
-    #     heads = ['Company', 'Tick', 'Last price']
-    #     for i, m in enumerate(self.modes):
-    #         # TODO mapping to the underlying string
-    #         h = {Mode.Last_FCF: 'Last FCF',
-    #              Mode.Avg_FCF: 'Avg. FCF',
-    #              Mode.UFCF_5x: 'UFCF 5x',
-    #              Mode.UFCF_8x: 'UFCF 8x'}[m]
-    #         heads.extend((h, poss_header))
-    #     print(tabulate(entries, headers=heads,
-    #                    tablefmt='fancy_grid', stralign='center', numalign='center', floatfmt=".2f"))
-    #
-    #     # generate Excel output
-    #     # styles = ['Comma', 'Comma', 'Comma']
-    #     # for _ in self.modes:
-    #     #     styles.extend(('Comma', 'Percent'))
-    #     # excel = ExcelOut(self.tickers, entries, styles=styles, headers=heads)
-    #     # excel.start()
 
 
 dcf = DCF('intc', country='United States')
