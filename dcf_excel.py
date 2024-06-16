@@ -13,6 +13,7 @@ from enum import IntEnum
 import yfinance as yf
 from tabulate import tabulate
 from calculator import ExcelWriter
+from datetime import datetime
 
 total_main_col = 12
 total_half_col = int(total_main_col / 2)
@@ -26,6 +27,7 @@ half_base_offset = total_half_elem + 2
 
 class RowIndex(IntEnum):
     """Excel row index"""
+    year = 1
     sales_growth_rate = 2
     sales = 3
     ebit_margin = 4
@@ -43,6 +45,17 @@ class RowIndex(IntEnum):
     returns = 32
     invested_capital = 33
     roic = 34
+
+    trade_year = 36
+    trade_sales_growth_rate = 37
+    trade_sales = 38
+    trade_ebit = 39
+    trade_interest_expense = 40
+    trade_eps_proj = 41
+    trade_adr_ratio = 42
+    trade_adr_convert = 43
+    trade_pe_ratio = 44
+    trade_price_target = 45
 
 
 class DataSet:
@@ -190,9 +203,9 @@ class DCF(Spread):
 
         self.sales = self.strip(self.income.match_title('Total Revenues'))
         self.forward_sales = self.trim_estimates('Revenue', nlead=8)
-        self.forward_ebit = self.trim_estimates('EBIT$')
+        self.forward_ebit = self.trim_estimates('EBIT$', nlead=8)
+        self.forward_interest = self.trim_estimates('Interest Expense')
 
-        # TODO Interest expense and Equity?
         self.ie = self.strip(self.income.match_title('Interest Expense'))
         self.book_value_equity = self.strip(self.balance.match_title('Total Equity'))
         self.book_value_debt = self.strip(self.balance.match_title('Total Debt'))
@@ -261,6 +274,7 @@ class DCF(Spread):
         self.compute_cumulative_df(d)
         self.compute_terminals(d)
         self.compute_return_invested_capital(d)
+        self.compute_trade(d)
 
         self.excel.wb.save('aaa.xlsx')
 
@@ -673,11 +687,48 @@ class DCF(Spread):
         # TODO end of cost of capital
         # invested_return.append(d['Cost of capital'][-1])
 
-
-dcf = DCF('intc', country='United States')
-# dcf = DCF('qcom', country='United States')
-dcf.compute()
-print("XXX", dcf)
+    def compute_trade(self, d):
+        trade_year = d.create_array('={}1'.format(colnum_string(1)), RowIndex.trade_year, style='')
+        sales_growth_rate = d.create_array('Revenue growth rate',
+                                           RowIndex.trade_sales_growth_rate, style='Percent')
+        sales = d.create_array('Revenue', RowIndex.trade_sales)
+        ebit = d.create_array('EBIT', RowIndex.trade_ebit)
+        interest_exp = d.create_array('Interest expense', RowIndex.trade_interest_expense)
+        eps_proj = d.create_array('EPS projection', RowIndex.trade_eps_proj)
+        d.set('ADR ratio', 1.0, RowIndex.trade_adr_ratio)
+        adr_conv = d.create_array('EPS proj. after conversion to ADR', RowIndex.trade_adr_convert)
+        pe_ratio = d.create_array('Forward P/E ratio', RowIndex.trade_pe_ratio)
+        price_target = d.create_array('Price target', RowIndex.trade_price_target)
+        for i in range(total_main_col):
+            # trade_year.append("={year}".format(year=str(i+datetime.now().year-1)))
+            trade_year.append("={}{}".format(
+                colnum_string(i+start_year_offset), RowIndex.year))
+            sales_growth_rate.append("={year}{sales_growth_row}".format(
+                year=colnum_string(i+start_year_offset),
+                sales_growth_row=RowIndex.sales_growth_rate))
+            sales.append("={year}{sales}".format(
+                year=colnum_string(i+start_year_offset),
+                sales=RowIndex.sales))
+            ebit.append("={year}{ebit}".format(
+                year=colnum_string(i+start_year_offset),
+                ebit=RowIndex.ebit))
+            if 0 <= i < len(self.forward_interest):
+                interest_exp.append("={}".format(self.forward_interest[i]))
+            eps_proj.append(
+                "=({year}{ebit}+{year}{interest_exp})*(1-{year}{tax_rate})/$B$27".format(
+                    year=colnum_string(i+start_year_offset),
+                    ebit=RowIndex.ebit, tax_rate=RowIndex.tax_rate,
+                    interest_exp=RowIndex.trade_interest_expense))
+            adr_conv.append(
+                "={year}{eps_proj}*B{adr_ratio}".format(
+                    year=colnum_string(i+start_year_offset),
+                    eps_proj=RowIndex.trade_eps_proj,
+                    adr_ratio=RowIndex.trade_adr_ratio, ))
+            # TODO average P/E ratio?
+            pe_ratio.append("={}".format(15.0))
+            price_target.append("={start_year}{adr_conv}*{start_year}{pe_ratio}".format(
+                adr_conv=RowIndex.trade_adr_convert, pe_ratio=RowIndex.trade_pe_ratio,
+                start_year=colnum_string(i+start_year_offset)))
 
 # Damodaran main data page
 # https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datacurrent.html
