@@ -4,6 +4,7 @@ from openpyxl.styles import Font, Alignment
 import re
 from utils import *
 from collections import OrderedDict
+from datetime import datetime
 
 total_main_col = 12
 
@@ -37,7 +38,7 @@ class ExcelWriter:
         sheet.cell(row=1, column=2).value = 'Base year'
         for i in range(1, total_main_col-1):
             cell = sheet.cell(row=1, column=i+2)
-            cell.value = i
+            cell.value = i+datetime.now().year-1
             cell.alignment = Alignment(horizontal='center')
         sheet.cell(row=1, column=total_main_col+1).value = 'Terminal year'
 
@@ -147,7 +148,10 @@ class ExcelArray:
             # cell.style = style
             cell.number_format = '0.0000'
         else:
-            assert False
+            if cell.style == "Normal":
+                pass
+            else:
+                assert False
         cell.font = self.excel.ft
         self.i += 1
 
