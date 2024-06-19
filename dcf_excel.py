@@ -202,8 +202,8 @@ class DCF(Spread):
         # Revenues, Operating Income, Interest Expense, ...
 
         self.sales = self.strip(self.income.match_title('Total Revenues'))
-        self.forward_sales = self.trim_estimates('Revenue', nlead=8)
-        self.forward_ebit = self.trim_estimates('EBIT$', nlead=8)
+        self.forward_sales = self.trim_estimates('Revenue')
+        self.forward_ebit = self.trim_estimates('EBIT$')
         self.forward_interest = self.trim_estimates('Interest Expense')
 
         self.ie = self.strip(self.income.match_title('Interest Expense'))
@@ -250,16 +250,22 @@ class DCF(Spread):
         # https://www.oaktreecapital.com/insights/memo/sea-change
         # self.riskfree_rate = .036
 
-    def trim_estimates(self, title, nlead=8, n=4, **args):
-        # Remove past annual/quarterly data from Estimates.
-        est = self.estimates.match_title(title, **args)
+    def trim_estimates(self, title, **kwargs):
+        # **kwargs: Passthrough to allow none_is_optional, optional argument
         result = None
-        if est is not None:
-            excess = next((i for i in range(1, n) if est[nlead:][-i] is not None), 0)
-            if excess-1 > 0:
-                result = est[nlead:][:-excess+1]
+        for i, a in enumerate(self.estimates.date_range):
+            if re.match(r'.*\bE$', a):
+                # Assuming table sorted in 'A' (actual) to 'E' (estimates)
+                tab = self.estimates.match_title(title, **kwargs)
+                if tab is not None:
+                    # Prune out trailing Nones
+                    result = [t for t in tab[i:] if t is not None]
+                break
+                # assert False
+            elif re.match(r'.*\bA$', a):
+                pass
             else:
-                result = est[nlead:]
+                assert False
         return result
 
     def compute(self):
@@ -714,13 +720,14 @@ class DCF(Spread):
                 ebit=RowIndex.ebit))
             if 0 <= i < len(self.forward_interest):
                 interest_exp.append("={}".format(self.forward_interest[i]))
+            # TODO Fix hardcoded "$B$27"
             eps_proj.append(
                 "=({year}{ebit}+{year}{interest_exp})*(1-{year}{tax_rate})/$B$27".format(
                     year=colnum_string(i+start_year_offset),
                     ebit=RowIndex.ebit, tax_rate=RowIndex.tax_rate,
                     interest_exp=RowIndex.trade_interest_expense))
             adr_conv.append(
-                "={year}{eps_proj}*B{adr_ratio}".format(
+                "={year}{eps_proj}/B{adr_ratio}".format(
                     year=colnum_string(i+start_year_offset),
                     eps_proj=RowIndex.trade_eps_proj,
                     adr_ratio=RowIndex.trade_adr_ratio, ))
