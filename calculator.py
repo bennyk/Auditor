@@ -5,8 +5,16 @@ import re
 from utils import *
 from collections import OrderedDict
 from datetime import datetime
+from spread import *
 
 total_main_col = 12
+total_half_col = int(total_main_col / 2)
+total_elem = 10
+total_half_elem = int(total_elem / 2)
+prev_year_offset = 1
+start_year_offset = 2
+next_year_offset = 3
+half_base_offset = total_half_elem + 2
 
 
 class ExcelWriter:
@@ -38,7 +46,7 @@ class ExcelWriter:
         sheet.cell(row=1, column=2).value = 'Base year'
         for i in range(1, total_main_col-1):
             cell = sheet.cell(row=1, column=i+2)
-            cell.value = i+datetime.now().year-1
+            cell.value = i+datetime.datetime.now().year-1
             cell.alignment = Alignment(horizontal='center')
         sheet.cell(row=1, column=total_main_col+1).value = 'Terminal year'
 
@@ -155,21 +163,20 @@ class ExcelArray:
         cell.font = self.excel.ft
         self.i += 1
 
-    # TODO Need to remove hardcode numbers 3, 12 and 13
     def last(self):
-        return "{}{}".format(colnum_string(13), self.j)
+        return "{}{}".format(colnum_string(total_main_col+1), self.j)
 
-    def last2(self):
-        return "{}{}".format(colnum_string(12), self.j)
+    def second_last(self):
+        return "{}{}".format(colnum_string(total_main_col), self.j)
 
     def value(self):
         return "{}{}".format(colnum_string(self.i), self.j)
 
     def start(self):
-        return colnum_string(3)
+        return colnum_string(next_year_offset)
 
     def end(self):
-        return colnum_string(12)
+        return colnum_string(total_main_col)
 
 
 class Calculator(object):
