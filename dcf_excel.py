@@ -1,28 +1,12 @@
 import re
 import pandas as pd
 
-from spread import Spread
-from utils import *
 from bcolors import colour_print, bcolors
-
-from openpyxl import Workbook, load_workbook, worksheet
-from openpyxl.styles import Font, Alignment
-from collections import OrderedDict
 from typing import List
 from enum import IntEnum
 import yfinance as yf
 from tabulate import tabulate
-from calculator import ExcelWriter
-from datetime import datetime
-
-total_main_col = 12
-total_half_col = int(total_main_col / 2)
-total_elem = 10
-total_half_elem = int(total_elem / 2)
-prev_year_offset = 1
-start_year_offset = 2
-next_year_offset = 3
-half_base_offset = total_half_elem + 2
+from calculator import *
 
 
 class RowIndex(IntEnum):
@@ -579,7 +563,7 @@ class DCF(Spread):
         d.set('PV (Terminal value)',
               "{term_value}*{cumulated_df}".format(
                   term_value=d.get('Terminal value').value(),
-                  cumulated_df=d.get('Cumulated discount factor').last2()),
+                  cumulated_df=d.get('Cumulated discount factor').second_last()),
               add_rollng_number())
 
         mark = 'PV (FCFF)'
