@@ -90,7 +90,8 @@ class MainTable:
     def run(self):
         print("Waiting to prompt header dialog")
         time.sleep(3)
-        header_containers = driver.find_element(By.XPATH,
+        header_containers = driver.find_element(
+            By.XPATH,
             "//div[contains(@class, 'container') and contains(@class, 'header')]")
         line = header_containers.text.split('\n')
         assert len(line) > 6
@@ -105,11 +106,19 @@ class MainTable:
 
         # Based on initial number of years setting + fudge factor
         # offset = 5*start_offset/years
-        self.open('Financials', start_offset=-1050, period_offset=5)
+
+        use_offset = False
+        kwargs = {}
+        if use_offset:
+            kwargs = {"start_offset": -1050, "period_offset": 5}
+        self.open('Financials', **kwargs)
         clip.run(selection=["Income Statement", "Balance Sheet", "Cash Flow Statement"])
 
+        if use_offset:
+            kwargs = {"start_offset": -1050, "period_offset": 58}
         # No change to start offset. Period offset based on 10 years in quarterly period
-        self.open('Valuation', start_offset=-1050, period_offset=58)
+        self.open('Valuation', **kwargs)
+
         clip.run(selection="Values")
 
         self.open('Estimates')
