@@ -26,20 +26,22 @@ class RowIndex(IntEnum):
     pv = 13
     end_of_roll_number = 14
 
-    returns = 32
-    invested_capital = 33
-    roic = 34
+    number_shares = 27
+    adr_ratio = 29
 
-    trade_year = 36
-    trade_sales_growth_rate = 37
-    trade_sales = 38
-    trade_ebit = 39
-    trade_interest_expense = 40
-    trade_eps_proj = 41
-    trade_adr_ratio = 42
-    trade_adr_convert = 43
-    trade_pe_ratio = 44
-    trade_price_target = 45
+    returns = 34
+    invested_capital = 35
+    roic = 36
+
+    trade_year = 38
+    trade_sales_growth_rate = 39
+    trade_sales = 40
+    trade_ebit = 41
+    trade_interest_expense = 42
+    trade_eps_proj = 43
+    trade_adr_convert = 44
+    trade_pe_ratio = 45
+    trade_price_target = 46
 
 
 class DataSet:
@@ -608,13 +610,21 @@ class DCF(Spread):
         d.set('Estimated value / share', "{value_of_equity}/{num_shares}".format(
             value_of_equity=d.get('Value of equity').value(),
             num_shares=d.get('Number of shares').value()), add_rollng_number())
+        # The conversion of ADR/GDRs into local stocks allows their holders to trade assets that are currently
+        #   restricted on the US and European stock exchanges.
+        # https://www.interactivebrokers.com/en/trading/adr-conversions.php
+        # TODO ADR ratio conversion need to be tailored based on the equity withheld at the Company.
+        d.set('ADR ratio', 1.0, add_rollng_number())
+        d.set('Value per share after ADR', "{value_per_share}/{adr_ratio}".format(
+            value_per_share=d.get("Estimated value / share").value(),
+            adr_ratio=d.get("ADR ratio").value()), add_rollng_number())
 
         ticker = self.get_ticker()
         avg_price = (ticker.info['regularMarketDayLow'] + ticker.info['regularMarketDayHigh']) / 2.
         d.set('Price', avg_price, add_rollng_number())
         d.set('Price as % of value', "{price}/{value_per_share}".format(
             price=d.get('Price').value(),
-            value_per_share=d.get('Estimated value / share').value()),
+            value_per_share=d.get('Value per share after ADR').value()),
               add_rollng_number(), style='Percent')
 
     def get_ticker(self):
@@ -685,7 +695,6 @@ class DCF(Spread):
         ebit = d.create_array('EBIT', RowIndex.trade_ebit)
         interest_exp = d.create_array('Interest expense', RowIndex.trade_interest_expense)
         eps_proj = d.create_array('EPS projection', RowIndex.trade_eps_proj)
-        d.set('ADR ratio', 1.0, RowIndex.trade_adr_ratio)
         adr_conv = d.create_array('EPS proj. after conversion to ADR', RowIndex.trade_adr_convert)
         pe_ratio = d.create_array('Forward P/E ratio', RowIndex.trade_pe_ratio)
         price_target = d.create_array('Price target', RowIndex.trade_price_target)
@@ -704,17 +713,19 @@ class DCF(Spread):
                 ebit=RowIndex.ebit))
             if 0 <= i < len(self.forward_interest):
                 interest_exp.append("={}".format(self.forward_interest[i]))
-            # TODO Fix hardcoded "$B$27"
             eps_proj.append(
-                "=({year}{ebit}+{year}{interest_exp})*(1-{year}{tax_rate})/$B$27".format(
+                "=({year}{ebit}+{year}{interest_exp})*(1-{year}{tax_rate})"
+                "/{start_year}{number_shares}".format(
                     year=colnum_string(i+start_year_offset),
-                    ebit=RowIndex.ebit, tax_rate=RowIndex.tax_rate,
+                    start_year=colnum_string(start_year_offset),
+                    ebit=RowIndex.ebit, tax_rate=RowIndex.tax_rate, number_shares=RowIndex.number_shares,
                     interest_exp=RowIndex.trade_interest_expense))
             adr_conv.append(
-                "={year}{eps_proj}/B{adr_ratio}".format(
+                "={year}{eps_proj}/{start_year}{adr_ratio}".format(
                     year=colnum_string(i+start_year_offset),
+                    start_year=colnum_string(start_year_offset),
                     eps_proj=RowIndex.trade_eps_proj,
-                    adr_ratio=RowIndex.trade_adr_ratio, ))
+                    adr_ratio=RowIndex.adr_ratio, ))
             # TODO average P/E ratio?
             pe_ratio.append("={}".format(15.0))
             price_target.append("={start_year}{adr_conv}*{start_year}{pe_ratio}".format(
