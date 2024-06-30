@@ -346,28 +346,24 @@ class DCF(Spread):
             ebit.append(e)
 
         fixed_margin = '={}{ebit_margin_row}'.format(
-            colnum_string(total_half_col-1), ebit_margin_row=RowIndex.ebit_margin)
+            colnum_string(len(self.forward_ebit)+1), ebit_margin_row=RowIndex.ebit_margin)
         remaining_col = total_main_col - len(self.forward_ebit)
-        for i in range(1, remaining_col):
+        for i in range(remaining_col):
             ebit_margin.append(fixed_margin)
             stable_ebit = "={col}{ebit_margin_row}*{col}{sales_row}".format(
-                col=colnum_string(i+total_half_col-1),
-                ebit_margin_row=RowIndex.ebit_margin, sales_row=RowIndex.sales
-            )
+                col=colnum_string(i+len(self.forward_ebit)+start_year_offset),
+                ebit_margin_row=RowIndex.ebit_margin, sales_row=RowIndex.sales)
             ebit.append(stable_ebit)
-        ebit_margin.append(fixed_margin)
-        ebit_formula = "={col}{ebit_margin_row}*{col}{sales_row}".format(
-            ebit_margin_row=RowIndex.ebit_margin, sales_row=RowIndex.sales,
-            col=colnum_string(total_main_col + 1))
-        ebit.append(ebit_formula)
 
     def compute_tax(self, d):
         tax_col = colnum_string(half_base_offset)
         etr = d.create_array('Tax rate', RowIndex.tax_rate, style='Percent')
         if self.forward_etr == 0:
-            colour_print("Is \"{}\" a REIT company?"
-                         " REIT company distributes at least 90% of its total yearly income to unit holders, the REIT itself is exempt from tax for that year, but unit holders are taxed on the distribution of income"
-                         .format(self.tick), bcolors.WARNING)
+            colour_print(
+                "Is \"{}\" a REIT company?"
+                " REIT company distributes at least 90% of its total yearly income to unit holders,"
+                " the REIT itself is exempt from tax for that year,"
+                " but unit holders are taxed on the distribution of income".format(self.tick), bcolors.WARNING)
             return
 
         assert type(self.forward_etr) is list
