@@ -220,6 +220,12 @@ class DCF(Spread):
         else:
             self.minority = 0
 
+        balance_minority_not_strip = self.balance.match_title('Minority Interest', none_is_optional=True)
+        if balance_minority_not_strip is not None:
+            self.balance_minority = self.strip(balance_minority_not_strip)
+        else:
+            self.balance_minority = 0
+
         self.shares = self.strip(self.income.match_title('Weighted Average Diluted Shares Outstanding'))
         forward_etr_not_strip = self.trim_estimates('Effective Tax Rate', none_is_optional=True)
         if forward_etr_not_strip is not None:
@@ -579,8 +585,10 @@ class DCF(Spread):
             debt = self.debt[-1]
         d.set('- Debt', "{}".format(debt), add_rollng_number())
 
-        # TODO
-        d.set('- Minority interest', 0, add_rollng_number())
+        minority = 0
+        if self.balance_minority:
+            minority = self.balance_minority[-1]
+        d.set('- Minority interest', minority, add_rollng_number())
         d.set('+ Cash', "{}".format(self.cash[-1]), add_rollng_number())
 
         non_op = 0
