@@ -586,7 +586,7 @@ class DCF(Spread):
         d.set('- Debt', "{}".format(debt), add_rollng_number())
 
         minority = 0
-        if self.balance_minority:
+        if self.balance_minority and self.balance_minority[-1] is not None:
             minority = self.balance_minority[-1]
         d.set('- Minority interest', minority, add_rollng_number())
         d.set('+ Cash', "{}".format(self.cash[-1]), add_rollng_number())
@@ -601,12 +601,13 @@ class DCF(Spread):
                 non_op = self.investments[-2]
         d.set('+ Non-operating assets', "{}".format(non_op), add_rollng_number())
 
+        # TODO Fixing none internal cell reference in the spread
         d.set('Value of equity',
               "{value_of_equity} - {debt} - {minority_interest} + {cash} + {non_op_asset}".format(
                   value_of_equity=d.get('Value of operating assets').value(),
-                  debt=d.get('- Debt').value(),
-                  minority_interest=d.get('- Minority interest').value(),
-                  cash=d.get('+ Cash').value(),
+                  debt=self.balance.match_title('Total Debt')[-1],
+                  minority_interest=minority,
+                  cash=self.balance.match_title('Total Cash')[-1],
                   non_op_asset=d.get('+ Non-operating assets').value()),
               add_rollng_number())
 
@@ -717,13 +718,20 @@ class DCF(Spread):
                 ebit=RowIndex.ebit))
             if 0 <= i < len(self.forward_interest):
                 interest_exp.append("={}".format(self.forward_interest[i]))
+
+            # SBC
+            sbc = 0
+            a = self.cashflow.match_title('Stock-Based Compensation', none_is_optional=True)
+            if a is not None:
+                sbc = a[-1]
+
             eps_proj.append(
-                "=({year}{ebit}+{year}{interest_exp})*(1-{year}{tax_rate})"
+                "=({year}{ebit}+{year}{interest_exp}+{sbc})*(1-{year}{tax_rate})"
                 "/{start_year}{number_shares}".format(
                     year=colnum_string(i+start_year_offset),
                     start_year=colnum_string(start_year_offset),
                     ebit=RowIndex.ebit, tax_rate=RowIndex.tax_rate, number_shares=RowIndex.number_shares,
-                    interest_exp=RowIndex.trade_interest_expense))
+                    sbc=sbc, interest_exp=RowIndex.trade_interest_expense))
             adr_conv.append(
                 "={year}{eps_proj}/{start_year}{adr_ratio}".format(
                     year=colnum_string(i+start_year_offset),
