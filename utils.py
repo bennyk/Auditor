@@ -9,6 +9,7 @@ def colnum_string(n):
         string = chr(65 + remainder) + string
     return string
 
+
 def excel_to_decimal(excel_column):
     decimal = 0
     for char in excel_column:

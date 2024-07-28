@@ -274,6 +274,8 @@ class DCF(Spread):
         self.compute_return_invested_capital(d)
         self.compute_trade(d)
 
+        self.collect(d)
+
         self.excel.wb.save('aaa.xlsx')
 
     def compute_revenue(self, d):
@@ -743,6 +745,17 @@ class DCF(Spread):
             price_target.append("={start_year}{adr_conv}*{start_year}{pe_ratio}".format(
                 adr_conv=RowIndex.trade_adr_convert, pe_ratio=RowIndex.trade_pe_ratio,
                 start_year=colnum_string(i+start_year_offset)))
+
+    def collect(self, d: ExcelDict):
+        title = 'Price as % of value'
+        a = self.title_value(title, d).value()
+        print("{}: {:.2f} %".format(title, calculate('#'+a, d)*100))
+        a = self.title_value('- Reinvestment', d).last()
+        print("Last reinvested was {:,.2f}".format(calculate('#'+a, d)))
+
+    @staticmethod
+    def title_value(title, d):
+        return d.get(title)
 
 # Damodaran main data page
 # https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datacurrent.html
