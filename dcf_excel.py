@@ -702,6 +702,10 @@ class DCF(Spread):
         # invested_return.append(d['Cost of capital'][-1])
 
     def compute_trade(self, d):
+        # ntm_pe_ratio = self.compute_next_average_pe_ratio()
+        ntm_pe_ratio = self.values.match_title('NTM Price / Normalized Earnings')
+        avg_ntm_pe_ratio = average(ntm_pe_ratio[1:])
+
         trade_year = d.create_array('={}1'.format(colnum_string(1)), RowIndex.trade_year, style='')
         sales_growth_rate = d.create_array('Revenue growth rate',
                                            RowIndex.trade_sales_growth_rate, style='Percent')
@@ -748,7 +752,8 @@ class DCF(Spread):
                     eps_proj=RowIndex.trade_eps_proj,
                     adr_ratio=RowIndex.adr_ratio, ))
             # TODO average P/E ratio?
-            pe_ratio.append("={}".format(15.0))
+            pe_ratio.append("={}".format(avg_ntm_pe_ratio))
+
             price_target.append("={start_year}{adr_conv}*{start_year}{pe_ratio}".format(
                 adr_conv=RowIndex.trade_adr_convert, pe_ratio=RowIndex.trade_pe_ratio,
                 start_year=colnum_string(i+start_year_offset)))
