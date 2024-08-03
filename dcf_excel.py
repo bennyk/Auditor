@@ -193,7 +193,13 @@ class DCF(Spread):
         self.forward_interest = self.trim_estimates('Interest Expense')
 
         self.ie = self.strip(self.income.match_title('Interest Expense'))
-        self.book_value_equity = self.strip(self.balance.match_title('Total Equity'))
+        book_value_equity = self.strip(self.balance.match_title('Total Equity'))
+
+        # Strip out Goodwill based on Damodaran
+        # https://aswathdamodaran.blogspot.com/2012/12/acquisition-accounting-ii-goodwill-more.html
+        book_goodwill = self.strip(self.balance.match_title('Goodwill'))[:-1]
+        self.book_value_equity = list_minus_list(book_value_equity, book_goodwill)
+
         self.book_value_debt = self.strip(self.balance.match_title('Total Debt'))
         self.current_debt = [0.]
         current_debt_not_strip = self.balance.match_title('Current Portion of Long-Term Debt', none_is_optional=True)
@@ -451,9 +457,8 @@ class DCF(Spread):
 
         # Terminal growth rate / End of ROIC * End of NOPAT
         term_growth_rate = "{}".format(d.get('Revenue growth rate').last())
-        # TODO Cost of capital at year 10 or enter manually
-        roic = .15
         terminal_col = total_main_col+1
+        roic = '{term_col}{roic}'.format(term_col=colnum_string(terminal_col), roic=RowIndex.roic)
         nopat_cell = '{term_col}{nopat}'.format(term_col=colnum_string(terminal_col), nopat=RowIndex.nopat)
         reinvestment.append('={term_grate}/{roic} * {nopat}'.format(
             term_grate=term_growth_rate, roic=roic, nopat=nopat_cell))
@@ -470,6 +475,8 @@ class DCF(Spread):
             fcff.append(fcff_cell)
 
     def compute_cost_of_capital(self, d):
+        # TODO Cost of capital at year 10 or enter manually
+
         # Cost of debt
         interest_expense = 0
         if self.ie[-1] is not None:
