@@ -70,12 +70,12 @@ class DataSet:
         # https://tradingeconomics.com/hong-kong/government-bond-yield
         # https://tradingeconomics.com/taiwan/government-bond-yield
         tab = {
-            'Malaysia': .03947,
+            'Malaysia': .0370,
             # 'United States': .0408,
-            'United States': .04532,
-            'Taiwan': .01565,
-            'China': .02291,
-            'Hong Kong': .0388, }
+            'United States': .0379,
+            'Taiwan': .0157,
+            'China': .0212,
+            'Hong Kong': .0297, }
         assert self.country in tab
         return tab[self.country]
 
