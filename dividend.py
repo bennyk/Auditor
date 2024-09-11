@@ -15,8 +15,8 @@ class Dividend(Spread):
 
         self.shares_out = self.income.match_title('Weighted Average Diluted Shares Outstanding')
         self.div_paid = self.cashflow.match_title('Common Dividends Paid')
-        ticker = yf.Ticker(get_symbol(self.tick))
-        self.mcap = ticker.info['marketCap'] / 1e6
+        self.ticker = yf.Ticker(get_symbol(self.tick))
+        self.mcap = self.ticker.info['marketCap'] / 1e6
 
     def trim_estimates(self, title, **kwargs):
         # **kwargs: Passthrough to allow none_is_optional, optional argument
@@ -86,7 +86,8 @@ class Dividend(Spread):
     def _earnings_yield_ttm(self):
         # Earnings yield
         earnings = self.income.match_title('Net Income')
-        eps0 = earnings[-1] / self.shares_out[-1]
+        asset_writedown = self.income.match_title('Asset Writedown')
+        eps0 = (earnings[-1] - asset_writedown[-1]) / self.shares_out[-1]
         earning_yield = (eps0 * self.shares_out[-1]) / self.mcap
         return earning_yield
 
@@ -148,7 +149,8 @@ class Dividend(Spread):
     def _cash_dividend_payout_ratio_ltm(self):
         div_paid = self.strip(self.cashflow.match_title('Common Dividends Paid'))
         net_income = self.strip(self.income.match_title('Net Income$'))
-        return -div_paid[-1] / net_income[-1]
+        asset_writedown = self.strip(self.income.match_title('Asset Writedown'))
+        return -div_paid[-1] / (net_income[-1] - asset_writedown[-1])
 
     def _dividend_payout_ratio_ltm(self):
         dps = self.strip(self.income.match_title('Dividends per share'))
@@ -292,9 +294,9 @@ class Dividend(Spread):
         self.compute_dividend_safety()
         # # self.compute_consistency()
         self.compute_dividend_estimates()
-        self.compute_metrics()
+        # self.compute_metrics()
 
 
-for co in ['kipreit', 'igbreit', 'xzl']:
+for co in ['kipreit', 'igbreit', 'klcc', 'xzl']:
     data = Dividend(co)
     data.compute()
