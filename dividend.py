@@ -2,17 +2,67 @@
 from calculator import *
 from bcolors import colour_print, bcolors
 import yfinance as yf
+from openpyxl import Workbook, worksheet
+from collections import OrderedDict
 
 one_hundred = 100
 
 
+class SpreadOut:
+    def __init__(self):
+        self.wb = Workbook()
+        self.ws = self.wb.create_sheet('Header')
+        self.od = OrderedDict()
+        self.column = 1
+
+        # removing initial sheet
+        ws = self.wb.active
+        self.wb.remove(ws)
+
+    def save(self):
+        self.wb.save('{}.xlsx'.format("dividend-out"))
+
+
+class _Spread:
+
+    def __init__(self, spread: SpreadOut, ticker):
+        self.od = spread.od
+        self.ws = spread.ws
+        self.column = spread.column
+        self.row = 2
+
+        # Set row to ticker name
+        self.ws.cell(row=1, column=self.column, value=ticker)
+
+    def write(self, title, ratio=None, bold=False):
+        if title not in self.od:
+            # Init pre-config template
+            self.ws.cell(row=self.row, column=1, value=title)
+            if bold:
+                self.ws.cell(row=self.row, column=1).font = Font(bold=True)
+            self.od[title] = {"row": self.row, "ratio": None}
+            self.ws.column_dimensions[colnum_string(1)].width = 36
+
+            self.row += 1
+
+        if ratio is not None:
+            print("{}: {:.2f}%".format(title, ratio * one_hundred))
+            assert title in self.od
+            od = self.od[title]
+            od["ratio"] = ratio
+            cell = self.ws.cell(row=od["row"], column=self.column)
+            cell.value = ratio
+            cell.number_format = '0.00%'
+
+
 class Dividend(Spread):
-    def __init__(self, tick, path='spreads'):
+    def __init__(self, tick, spread, path='spreads'):
         colour_print("Company's ticker '{}'".format(tick), bcolors.UNDERLINE)
 
         self.wb: Workbook = load_workbook(path + '/' + tick + '.xlsx')
         super().__init__(self.wb, tick)
 
+        self.spread = _Spread(spread, tick)
         self.shares_out = self.income.match_title('Weighted Average Diluted Shares Outstanding')
         self.div_paid = self.cashflow.match_title('Common Dividends Paid')
         self.ticker = yf.Ticker(get_symbol(self.tick))
@@ -38,6 +88,10 @@ class Dividend(Spread):
             else:
                 assert False
         return result
+
+    def add_subtitle(self, subtitle):
+        colour_print(subtitle, bcolors.UNDERLINE)
+        self.spread.write(subtitle, bold=True)
 
     # Dividend yield
     def _dividend_yield_ttm(self):
@@ -224,59 +278,68 @@ class Dividend(Spread):
         return cash[-1] / current_debt[-1]
 
     def compute_dividend_yield(self):
-        colour_print("Dividend Yield", bcolors.UNDERLINE)
-        print("4 year average dividend yield: {:.2f}%".format(self._dividend_yield_past_years() * one_hundred))
-        print("Dividend yield (TTM): {:.2f}%".format(self._dividend_yield_ttm() * one_hundred))
-        print("Dividend yield (FWD): {:.2f}%".format(self._dividend_yield_ntm() * one_hundred))
-        print("1 year yield on cost: {:.2f}%".format(self._yield_on_cost(-2) * one_hundred))
-        print("3 year yield on cost: {:.2f}%".format(self._yield_on_cost(-4) * one_hundred))
-        print("5 year yield on cost: {:.2f}%".format(self._yield_on_cost(-6) * one_hundred))
-        print("Earnings yield (TTM): {:.2f}%".format(self._earnings_yield_ttm() * one_hundred))
-        print("Earnings yield (NTM): {:.2f}%".format(self._earnings_yield_ntm() * one_hundred))
+        self.add_subtitle("Dividend Yield")
+        self.spread.write("4 year average dividend yield past years", ratio=self._dividend_yield_past_years())
+        self.spread.write("Dividend yield (TTM)", ratio=self._dividend_yield_ttm())
+        self.spread.write("Dividend yield (FWD)", ratio=self._dividend_yield_ntm())
+        self.spread.write("1 year yield on cost", ratio=self._yield_on_cost(-2))
+        self.spread.write("3 year yield on cost", ratio=self._yield_on_cost(-4))
+        self.spread.write("5 year yield on cost", ratio=self._yield_on_cost(-6))
+        self.spread.write("Earnings yield (TTM)", ratio=self._earnings_yield_ttm())
+        self.spread.write("Earnings yield (NTM)", ratio=self._earnings_yield_ntm())
+
+        self.spread.row += 1
         print()
 
     def compute_dps_growth(self):
-        colour_print("DPS Growth", bcolors.UNDERLINE)
-        print("DPS growth (FWD): {:.2f}%".format(self._dps_growth_ntm() * one_hundred))
-        print("DPS growth (LTM): {:.2f}%".format(self._dps_growth_ltm() * one_hundred))
+        self.add_subtitle("DPS Growth")
+        self.spread.write("DPS growth (FWD)", ratio=self._dps_growth_ntm())
+        self.spread.write("DPS growth (LTM)", ratio=self._dps_growth_ltm())
+
         dps, years = self._dps_growth_next_years()
-        print("DPS growth rate for next {} years since {} (CAGR): {:.2f}%"
-              .format(len(years), years[0], dps*one_hundred))
+        # self.spread.write("DPS growth rate for next {} years since {} (CAGR)".format(
+        self.spread.write("DPS growth rate for next {} years (CAGR)".format(
+            len(years), ), ratio=dps)
+
         # TODO past growth rate
         dps, years = self._dps_growth_past_years(3)
-        print("DPS growth rate for past {} years since {} (CAGR): {:.2f}%"
-              .format(len(years), years[0], dps*one_hundred))
+        self.spread.write("DPS growth rate for past {} years (CAGR)"
+                          .format(len(years), ), ratio=dps)
+
         dps, years = self._dps_growth_past_years(5)
-        print("DPS growth rate for past {} years since {} (CAGR): {:.2f}%"
-              .format(len(years), years[0], dps * one_hundred))
+        self.spread.write("DPS growth rate for past {} years (CAGR)"
+                          .format(len(years), ), dps)
         try:
             dps, years = self._dps_growth_past_years(9)
-            print("DPS growth rate for past {} years since {} (CAGR): {:.2f}%"
-                  .format(len(years), years[0], dps * one_hundred))
+            self.spread.write("DPS growth rate for past {} years (CAGR)"
+                              .format(len(years), ), dps)
         except TypeError:
             pass
+        self.spread.row += 1
         print()
 
     def compute_dividend_safety(self):
-        colour_print("Dividend Safety", bcolors.UNDERLINE)
-        print("Cash dividend payout ratio (LTM): {:.2f}%".format(self._cash_dividend_payout_ratio_ltm() * one_hundred))
-        print("Dividend payout ratio (LTM): {:.2f}%".format(self._dividend_payout_ratio_ltm() * one_hundred))
-        print("Dividend payout ratio 1y: {:.2f}%".format(self._dividend_payout_ratio_1y() * one_hundred))
-        print("Cash flow dividend payout ratio (LTM): {:.2f}%".format(self._cash_flow_payout_ratio() * one_hundred))
-        print("Cash flow dividend payout ratio 1y: {:.2f}%".format(self._cash_flow_payout_ratio_1y() * one_hundred))
-        print("Free cash flow yield to dividend yield ratio (LTM): {:.2f}%".format(
-            self._cash_flow_yield_to_dividend_yield() * one_hundred))
-        print("Dividend yield ratio to dividend payout ratio (LTM): {:.2f}%".format(
-            self._dividend_yield_to_dividend_payout() * one_hundred))
+        self.add_subtitle("Dividend Safety")
+        self.spread.write("Cash dividend payout ratio (LTM)", ratio=self._cash_dividend_payout_ratio_ltm())
+        self.spread.write("Dividend payout ratio (LTM)", ratio=self._dividend_payout_ratio_ltm())
+        self.spread.write("Dividend payout ratio 1y", ratio=self._dividend_payout_ratio_1y())
+        self.spread.write("Cash flow dividend payout ratio (LTM)", ratio=self._cash_flow_payout_ratio())
+        self.spread.write("Cash flow dividend payout ratio 1y", ratio=self._cash_flow_payout_ratio_1y())
+        self.spread.write("Free cash flow yield to dividend yield ratio (LTM)",
+                          self._cash_flow_yield_to_dividend_yield())
+        self.spread.write("Dividend yield ratio to dividend payout ratio (LTM)",
+                          self._dividend_yield_to_dividend_payout())
+        self.spread.row += 1
         print()
 
     def compute_consistency(self):
         pass
 
     def compute_dividend_estimates(self):
-        colour_print("Dividend Estimates", bcolors.UNDERLINE)
-        print("Next dividend payout growth 3y: {:.2f}%".format(self._dividend_payout_ratio_next_years(3) * one_hundred))
-        print("Next dividend payout growth 2y: {:.2f}%".format(self._dividend_payout_ratio_next_years(2) * one_hundred))
+        self.add_subtitle("Dividend Estimates")
+        self.spread.write("Dividend payout growth next 3y", self._dividend_payout_ratio_next_years(3))
+        self.spread.write("Dividend payout growth next 2y", self._dividend_payout_ratio_next_years(2))
+        self.spread.row += 1
         print()
 
     def compute_metrics(self):
@@ -289,14 +352,17 @@ class Dividend(Spread):
         print()
 
     def compute(self):
-        self.compute_dividend_yield()
-        self.compute_dps_growth()
         self.compute_dividend_safety()
-        # # self.compute_consistency()
+        self.compute_dps_growth()
+        self.compute_dividend_yield()
+        # self.compute_consistency()
         self.compute_dividend_estimates()
         # self.compute_metrics()
 
 
+spread = SpreadOut()
 for co in ['kipreit', 'igbreit', 'klcc', 'xzl']:
-    data = Dividend(co)
+    spread.column += 1
+    data = Dividend(co, spread)
     data.compute()
+spread.save()
