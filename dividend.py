@@ -1,4 +1,3 @@
-
 from calculator import *
 from bcolors import colour_print, bcolors
 import yfinance as yf
@@ -203,8 +202,23 @@ class Dividend(Spread):
     def _cash_dividend_payout_ratio_ltm(self):
         div_paid = self.strip(self.cashflow.match_title('Common Dividends Paid'))
         net_income = self.strip(self.income.match_title('Net Income$'))
-        asset_writedown = self.strip(self.income.match_title('Asset Writedown'))
-        return -div_paid[-1] / (net_income[-1] - asset_writedown[-1])
+        ffo = net_income[-1]
+        a = self.cashflow.match_title('Total Asset Writedown', none_is_optional=True)
+        if a is not None:
+            asset_writedown = self.strip(a)
+            ffo += asset_writedown[-1]
+
+        a = self.cashflow.match_title('Total Depreciation', none_is_optional=True)
+        if a is not None:
+            depreciation = self.strip(a)
+            ffo += depreciation[-1]
+
+        a = self.cashflow.match_title('\\(Gain\\) Loss On Sale of Asset', none_is_optional=True)
+        if a is not None:
+            gain_loss_asset_sales = self.strip(a)
+            if gain_loss_asset_sales[-1] is not None:
+                ffo += gain_loss_asset_sales[-1]
+        return -div_paid[-1] / ffo
 
     def _dividend_payout_ratio_ltm(self):
         dps = self.strip(self.income.match_title('Dividends per share'))
@@ -361,7 +375,15 @@ class Dividend(Spread):
 
 
 spread = SpreadOut()
-for co in ['kipreit', 'igbreit', 'klcc', 'xzl']:
+# for co in ['kipreit', 'igbreit', 'klcc', 'ytlreit', 'xzl']:
+cos = ['kipreit', 'igbreit', 'klcc', 'ytlreit',
+       'sunreit', 'pavreit', 'axreit', 'clmt',
+       'sentral', 'alaqar', 'uoareit', 'hektar',
+       'alsreit', ]
+cos = ['sunreit']
+# arreit, atrium, amfirst, twrreit
+
+for co in cos:
     spread.column += 1
     data = Dividend(co, spread)
     data.compute()
