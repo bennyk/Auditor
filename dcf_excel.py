@@ -193,12 +193,13 @@ class DCF(Spread):
         self.forward_interest = self.trim_estimates('Interest Expense')
 
         self.ie = self.strip(self.income.match_title('Interest Expense'))
-        book_value_equity = self.strip(self.balance.match_title('Total Equity'))
+        self.book_value_equity = self.strip(self.balance.match_title('Total Equity'))
 
         # Strip out Goodwill based on Damodaran
         # https://aswathdamodaran.blogspot.com/2012/12/acquisition-accounting-ii-goodwill-more.html
-        book_goodwill = self.strip(self.balance.match_title('Goodwill'))[:-1]
-        self.book_value_equity = list_minus_list(book_value_equity, book_goodwill)
+        a = self.balance.match_title('Goodwill', none_is_optional=True)
+        if a is not None:
+            self.book_value_equity = list_minus_list(self.book_value_equity, self.strip(a))
 
         self.book_value_debt = self.strip(self.balance.match_title('Total Debt'))
         self.current_debt = [0.]
@@ -611,12 +612,16 @@ class DCF(Spread):
         d.set('+ Non-operating assets', "{}".format(non_op), add_rollng_number())
 
         # TODO Fixing none internal cell reference in the spread
+        cash = self.balance.match_title('Total Cash', none_is_optional=True)
+        if cash is None:
+            cash = self.balance.match_title('Cash And Equivalents')
+
         d.set('Value of equity',
               "{value_of_equity} - {debt} - {minority_interest} + {cash} + {non_op_asset}".format(
                   value_of_equity=d.get('Value of operating assets').value(),
                   debt=self.balance.match_title('Total Debt')[-1],
                   minority_interest=minority,
-                  cash=self.balance.match_title('Total Cash')[-1],
+                  cash=cash[-1],
                   non_op_asset=d.get('+ Non-operating assets').value()),
               add_rollng_number())
 
