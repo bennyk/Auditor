@@ -276,14 +276,14 @@ class Calculator:
 
     @cache
     def evaluate_cell(self, cell, d):
-        value = None
+        value = 0
         if re.match(r'#[A-Z]+\d+', cell):
             expression = d.get_expr(cell[1:])
             if type(expression) not in (float, int):
-                value = self.evaluate_expression(expression, d)
+                if expression is not None:
+                    value = self.evaluate_expression(expression, d)
             else:
                 value = expression
-        assert value is not None
         return value
 
     @cache
