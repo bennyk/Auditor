@@ -1,3 +1,4 @@
+import datetime
 import re
 import pandas as pd
 
@@ -267,6 +268,27 @@ class DCF(Spread):
                 assert False
         return result
 
+    def snp500_return(self):
+        # Get S&P 500 data from the last 10 years
+        today = datetime.datetime.today()
+        sp500 = yf.download('^GSPC',
+                            start='{}-01-01'.format(str(today.year-11)),
+                            end='{}-01-01'.format(str(today.year-1)))
+
+        # Calculate the total return (closing prices)
+        initial_value = sp500['Close'].iloc[0]
+        final_value = sp500['Close'].iloc[-1]
+        total_return = (final_value - initial_value) / initial_value
+
+        # Number of years
+        years = (sp500.index[-1] - sp500.index[0]).days / 365.25
+
+        # Calculate the annualized return
+        annualized_return = (1 + total_return) ** (1 / years) - 1
+
+        print(f"The annualized return over the last {years:.2f} years is {annualized_return:.2%}")
+        return annualized_return
+
     def compute(self):
         d = self.excel.create_dict()
         self.compute_revenue(d)
@@ -474,6 +496,45 @@ class DCF(Spread):
                 nopat=RowIndex.nopat, reinvest=RowIndex.reinvestment,
                 prev_year=colnum_string(i+prev_year_offset))
             fcff.append(fcff_cell)
+
+    def _compute_cost_of_capital(self):
+        shares = self.shares[-1]
+        ticker = self.get_ticker()
+        avg_price = (ticker.info['regularMarketDayLow'] + ticker.info['regularMarketDayHigh']) / 2.
+        mv_equity = shares * avg_price
+
+        interest_expense = 0
+        if self.ie[-1] is not None:
+            interest_expense = self.ie[-1]
+
+        pretax_cost_of_debt = self.riskfree_rate
+        # Lookup Morgan Stanley bond rating
+        # TODO bond rating
+        pretax_cost_of_debt += .0174
+        # TODO 3 years maturity for Intel
+        avg_maturity = 3
+        mv_debt = -interest_expense * (1-(1+pretax_cost_of_debt) ** -avg_maturity)/pretax_cost_of_debt
+        book_value_debt = self.book_value_debt[-1]
+        mv_debt += book_value_debt / (1+pretax_cost_of_debt)**avg_maturity
+        mv = mv_equity + mv_debt
+        cost_of_capital = mv_equity / mv
+
+        # Levered beta for equity:
+        # TODO unlevered beta for semiconductor
+        unlevered_beta = 1.46
+        levered_beta = unlevered_beta * (1 + (1-self.marginal_tax_rate) * (mv_debt/mv_equity))
+
+        # ERP
+        erp = self.snp500_return() - self.riskfree_rate
+        cost_of_equity = self.riskfree_rate + levered_beta * erp
+
+        weight_cost_of_debt = mv_debt/mv
+        cost_of_debt = pretax_cost_of_debt * (1-self.marginal_tax_rate)
+
+        # No preferred stock for now
+        capital_coc = cost_of_capital*cost_of_equity + weight_cost_of_debt*cost_of_debt
+        print("AAA", capital_coc)
+        pass
 
     def compute_cost_of_capital(self, d):
         # TODO Cost of capital at year 10 or enter manually
