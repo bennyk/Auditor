@@ -268,13 +268,12 @@ class DCF(Spread):
                 assert False
         return result
 
-    def snp500_return(self):
+    def sp500_return(self):
         # Get S&P 500 data from the last 10 years
         today = datetime.datetime.today()
         sp500 = yf.download('^GSPC',
                             start='{}-01-01'.format(str(today.year-11)),
                             end='{}-01-01'.format(str(today.year-1)))
-
         # Calculate the total return (closing prices)
         initial_value = sp500['Close'].iloc[0]
         final_value = sp500['Close'].iloc[-1]
@@ -287,7 +286,9 @@ class DCF(Spread):
         annualized_return = (1 + total_return) ** (1 / years) - 1
 
         print(f"The annualized return over the last {years:.2f} years is {annualized_return:.2%}")
-        return annualized_return
+        # Convert the numbers from numpy.float64 to float.
+        # yfinance numpy.float64 need to be convert to regular float
+        return float(annualized_return)
 
     def compute(self):
         d = self.excel.create_dict()
@@ -497,7 +498,7 @@ class DCF(Spread):
                 prev_year=colnum_string(i+prev_year_offset))
             fcff.append(fcff_cell)
 
-    def _compute_cost_of_capital(self):
+    def compute_cost_of_capital(self, d):
         shares = self.shares[-1]
         ticker = self.get_ticker()
         avg_price = (ticker.info['regularMarketDayLow'] + ticker.info['regularMarketDayHigh']) / 2.
@@ -509,7 +510,7 @@ class DCF(Spread):
 
         pretax_cost_of_debt = self.riskfree_rate
         # Lookup Morgan Stanley bond rating
-        # TODO bond rating
+        # TODO Intel default bond rating asserted by Moody agency rated to BA1
         pretax_cost_of_debt += .0174
         # TODO 3 years maturity for Intel
         avg_maturity = 3
@@ -519,13 +520,13 @@ class DCF(Spread):
         mv = mv_equity + mv_debt
         cost_of_capital = mv_equity / mv
 
-        # Levered beta for equity:
-        # TODO unlevered beta for semiconductor
+        # Levered beta for equity
+        # TODO Unlevered beta for semiconductor
         unlevered_beta = 1.46
         levered_beta = unlevered_beta * (1 + (1-self.marginal_tax_rate) * (mv_debt/mv_equity))
 
         # ERP
-        erp = self.snp500_return() - self.riskfree_rate
+        erp = self.sp500_return() - self.riskfree_rate
         cost_of_equity = self.riskfree_rate + levered_beta * erp
 
         weight_cost_of_debt = mv_debt/mv
@@ -533,10 +534,33 @@ class DCF(Spread):
 
         # No preferred stock for now
         capital_coc = cost_of_capital*cost_of_equity + weight_cost_of_debt*cost_of_debt
-        print("AAA", capital_coc)
-        pass
+        self.add_coc_spread(capital_coc, d)
 
-    def compute_cost_of_capital(self, d):
+    def add_coc_spread(self, capital_coc, d):
+        coc = d.create_array('Cost of capital', RowIndex.cost_of_capital, style="Percent")
+        coc.append(None)
+        coc.append(capital_coc)
+        for i in range(1, total_half_elem):
+            cell = "={start_year}{coc_row}".format(
+                start_year=colnum_string(i+start_year_offset),
+                coc_row=RowIndex.cost_of_capital)
+            coc.append(cell)
+
+        for i in range(1, total_half_elem+1):
+            cell = "={current_year}{coc_row}-({start_year}{coc_row}-{end_year}{coc_row})/5".format(
+                current_year=colnum_string(i+total_half_col),
+                start_year=colnum_string(start_year_offset+total_half_elem),
+                end_year=colnum_string(total_main_col+1),
+                coc_row=RowIndex.cost_of_capital)
+            coc.append(cell)
+
+        # Mature market ERP
+        # https://www.investopedia.com/terms/c/country-risk-premium.asp
+        cell = "={riskfree_rate}+{mature_market_erp}".format(
+            riskfree_rate=self.riskfree_rate, mature_market_erp=.0411)
+        coc.append(cell)
+
+    def _compute_cost_of_capital(self, d):
         # TODO Cost of capital at year 10 or enter manually
 
         # Cost of debt
