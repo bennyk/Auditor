@@ -521,9 +521,10 @@ class DCF(Spread):
         cost_of_capital = mv_equity / mv
 
         # Levered beta for equity
-        # TODO Unlevered beta for semiconductor
-        unlevered_beta = 1.46
-        levered_beta = unlevered_beta * (1 + (1-self.marginal_tax_rate) * (mv_debt/mv_equity))
+        # Damodaran: Unlevered beta for semiconductor
+        # unlevered_beta = 1.46
+        # levered_beta = unlevered_beta * (1 + (1-self.marginal_tax_rate) * (mv_debt/mv_equity))
+        levered_beta = ticker.info['beta']
 
         # ERP
         erp = self.sp500_return() - self.riskfree_rate
