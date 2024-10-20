@@ -456,8 +456,33 @@ class DCF(Spread):
         #   (forward_2y_sales-forward_sales)/sales_to_cap))))
         # https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/capex.html
 
-        # Latest sales to book value of equity
-        sales_to_cap_source = self.sales[-1] / self.book_value_equity[-1]
+        # Invested Capital=(Total Current Assets−Total Operating Liabilities)+Total Non current Assets
+        test = self.balance.match_title('Total Current Assets', none_is_optional=True)
+        if test is not None:
+            current_assets = list_minus_list(test[1:], self.balance.match_title('Total Cash')[1:])
+        else:
+            current_assets = self.balance.match_title('Other Current Assets')[1:]
+        invested_cap = current_assets
+
+        test = self.balance.match_title('Total Current Liabilities', none_is_optional=True)
+        if test is not None:
+            operating_liabilities = list_negate(test[1:])
+        else:
+            operating_liabilities = self.balance.match_title('Other Current Liabilities')[1:]
+        invested_cap = list_add_list(invested_cap, operating_liabilities)
+
+        test = self.balance.match_title('Net Property Plant And Equipment', none_is_optional=True)
+        if test is not None:
+            non_current_assets = test[1:]
+        else:
+            non_current_assets = self.balance.match_title('Gross Property Plant And Equipment')[1:]
+        invested_cap = list_add_list(invested_cap, non_current_assets)
+
+        if invested_cap[0] == 0:
+            invested_cap[0] = 1
+        a = list_over_list(self.sales, invested_cap)
+        sales_to_cap_source = average(a[-3:])
+
         print("Computed Sales to cap ratio {:.2f}".format(sales_to_cap_source))
         # TODO Asia countries not in U.S. coverage
         if True:
