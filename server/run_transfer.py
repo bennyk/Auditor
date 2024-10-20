@@ -19,7 +19,7 @@ from table import Page, fix_currency, fix_percent
 from bcolors import colour_print, bcolors
 import bootstrap
 
-global driver
+global driver, one_time_pass
 
 
 class WaitCapture:
@@ -51,6 +51,15 @@ class MainTable:
         driver.find_element(By.PARTIAL_LINK_TEXT, "{title}".format(title=title)).click()
         # TODO 5 secs sleep might not work in Valuation spread.
         time.sleep(8)
+
+        global one_time_pass
+        # 3 times of one_time_pass for Financials, Valuation and Estimates for one round.
+        if one_time_pass < 3:
+            elem = driver.find_element(By.CLASS_NAME, 'mdi-decimal-increase')
+            elem.click()
+            elem.click()
+            time.sleep(2)
+            one_time_pass += 1
 
         if start_offset is not None:
             assert period_offset is not None
@@ -107,15 +116,17 @@ class MainTable:
         # Based on initial number of years setting + fudge factor
         # offset = 5*start_offset/years
 
-        use_offset = False
+        use_offset = True
         kwargs = {}
-        if use_offset:
-            kwargs = {"start_offset": -1050, "period_offset": 5}
+        # Load half of the full years range of 10 years
+        # if use_offset:
+        #     kwargs = {"start_offset": -1050, "period_offset": 5}
         self.open('Financials', **kwargs)
         clip.run(selection=["Income Statement", "Balance Sheet", "Cash Flow Statement"])
 
         if use_offset:
-            kwargs = {"start_offset": -1050, "period_offset": 58}
+            # use_offset to load half of the total range of 58.
+            kwargs = {"start_offset": -1050, "period_offset": 23.2}
         # No change to start offset. Period offset based on 10 years in quarterly period
         self.open('Valuation', **kwargs)
 
@@ -231,7 +242,8 @@ class Clipboard:
             page.parse_top()
             first_word = title.split()[0]
             ws = self.wb.create_sheet(first_word)
-            pref_num_format = '0.00'
+            # Increasing number format from 2 digit to 4 digits.
+            pref_num_format = '0.0000'
             for row, row_data in enumerate(page.data, start=1):
                 for col, cell_val in enumerate(row_data, start=1):
                     number_flag = False
@@ -260,7 +272,8 @@ class Clipboard:
 
 
 def run_main():
-    global driver
+    global driver, one_time_pass
+    one_time_pass = 0
 
     # bootstrap functions
     driver = webdriver.Chrome()
