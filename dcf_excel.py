@@ -283,12 +283,13 @@ class DCF(Spread):
         years = (sp500.index[-1] - sp500.index[0]).days / 365.25
 
         # Calculate the annualized return
-        annualized_return = (1 + total_return) ** (1 / years) - 1
+        a = (1 + total_return) ** (1 / years) - 1
+        annualized_return = float(a.array[0])
 
         print(f"The annualized return over the last {years:.2f} years is {annualized_return:.2%}")
         # Convert the numbers from numpy.float64 to float.
         # yfinance numpy.float64 need to be convert to regular float
-        return float(annualized_return)
+        return annualized_return
 
     def compute(self):
         d = self.excel.create_dict()
@@ -766,6 +767,7 @@ class DCF(Spread):
                 tick_name = tick_name + '.{}'.format(suffix)
 
             # Test the ticker by obtaining beta
+            print("Querying ticker name: \"{}\"".format(tick_name))
             ticker = yf.Ticker(tick_name)
             if 'beta' not in ticker.info:
                 assert len(self.head) > 0
