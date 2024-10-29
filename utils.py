@@ -122,10 +122,18 @@ def get_symbol(query, preferred_exchange=''):
             return 'No Symbol Found'
 
         symbol = quotes[0]['symbol']
-        for quote in quotes:
-            if quote['exchange'] == preferred_exchange:
-                symbol = quote['symbol']
-                break
+        if len(quotes) >= 1:
+            if len(quotes) > 1:
+                print("Number of symbols found in query:", len(quotes))
+            for quote in quotes:
+                # Removing exchange quote['exchange'] == preferred_exchange:
+                if not re.match('OTC Market', quote['exchDisp']):
+                    print("One possible match is \"{shortname}\" and {symbol}".format(
+                        shortname=quote['shortname'], symbol=quote['symbol']))
+                    symbol = quote['symbol']
+                    break
+        else:
+            assert symbol is not None
         return symbol
 
 
