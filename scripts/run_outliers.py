@@ -1,7 +1,6 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mtick
 import yfinance as yf
 import numpy as np
 from scipy import stats
@@ -11,17 +10,6 @@ market = 'SPY'
 stock = 'INTC'
 # stock = 'NVDA'
 # stock = 'AMD'
-
-# stock = 'DPZ'
-# stock = 'TSM'
-#
-# stock = 'QBTS'
-# stock = 'LAES'
-#
-# stock = 'BIDU'
-# stock = 'BABA'
-# stock = 'JD'
-# stock = 'PDD'
 #
 # ETF
 # stock = 'QQQ'
