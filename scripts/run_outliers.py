@@ -91,7 +91,7 @@ if len(outliers[outliers]) > 0:
          stock_return, stock_price, volume) in zip(outlier_dates, outlier_market_returns,
                                                    outlier_stock_returns, stock_prices, stock_volumes):
         print(f"Date: {date.date()},"
-              f" {market} Return: {market_return*100:.2f} %, {stock} Return: {stock_return * 100:.2f} %,"
+              f" {market} Return: {market_return:.2f} %, {stock} Return: {stock_return:.2f} %,"
               f" {stock} Price: {stock_price:.2f}, Volume: {volume / 1e6:.2f}m")
 else:
     print("No outlier was found")
