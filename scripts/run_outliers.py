@@ -1,6 +1,7 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.ticker as tick
 import yfinance as yf
 import numpy as np
 from scipy import stats
@@ -22,7 +23,7 @@ data = yf.download(tickers, start='2023-12-10', end='2024-12-10')
 print("market {} and stock {}".format(market, stock))
 
 # Step 2: Calculate daily returns
-returns = data['Adj Close'].pct_change().dropna()
+returns = data['Adj Close'].pct_change().dropna() * 100
 
 # Step 3: Perform linear regression to find slope and intercept
 slope, intercept, r_value, p_value, std_err = stats.linregress(returns[market], returns[stock])
@@ -38,7 +39,17 @@ z_scores = np.abs(stats.zscore(np.column_stack((returns[market], returns[stock])
 outliers = (z_scores > threshold).any(axis=1)
 
 # Step 5: Create scatter plot with regression line and highlight outliers
-plt.figure(figsize=(10, 6))
+fig = plt.figure(figsize=(10, 6))
+
+# These are subplot grid parameters encoded as a single integer.
+# For example, "111" means "1x1 grid, first subplot" and "234" means "2x3 grid, 4th subplot".
+# Alternative form for add_subplot(111) is add_subplot(1, 1, 1).
+# https://stackoverflow.com/questions/3584805/what-does-the-argument-mean-in-fig-add-subplot111
+ax = fig.add_subplot(111)
+
+# https://stackoverflow.com/questions/31357611/format-y-axis-as-percent
+ax.yaxis.set_major_formatter(tick.PercentFormatter())
+ax.xaxis.set_major_formatter(tick.PercentFormatter())
 
 # Scatter plot for normal points
 plt.scatter(returns[market][~outliers], returns[stock][~outliers], color='gray', label='Normal Points', alpha=0.7)
@@ -52,8 +63,8 @@ plt.plot(returns[market], slope * returns[market] + intercept, color='green', li
 # Step 6: Center the view on the plot
 # plt.xlim(-0.1, 0.1)  # Adjust these values based on your data range
 # plt.ylim(-0.1, 0.1)  # Adjust these values based on your data range
-plt.xlim(returns[market].min() - 0.01, returns[market].max() + 0.01)
-plt.ylim(returns[stock].min() - 0.01, returns[stock].max() + 0.01)
+# plt.xlim(returns[market].min() - 0.01, returns[market].max() + 0.01)
+# plt.ylim(returns[stock].min() - 0.01, returns[stock].max() + 0.01)
 
 plt.title('1-Year Daily Returns: {} vs {} with Outliers Highlighted'.format(market, stock))
 plt.xlabel(f'{market} Daily Returns')
