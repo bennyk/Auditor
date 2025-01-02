@@ -497,7 +497,16 @@ class DCF(Spread):
             sales_to_cap_ratio = sales_to_cap_source
 
         reinvestment = d.create_array('- Reinvestment', RowIndex.reinvestment)
-        reinvestment.append(None)
+        # Current year based on Reinvestment is derived from current year for Capex + D&A + Changes in NWC
+        capex = self.strip(self.cashflow.match_title('Capital Expenditure'))
+        dna = self.strip(self.cashflow.match_title('Total Depreciation & Amortization'))
+        net_capex = list_add_list(capex, dna)
+        net_capex = list_negate(net_capex)
+
+        change_in_working_cap = self.strip(self.cashflow.match_title('Memo: Change in Net Working Capital'))
+        test = list_add_list(net_capex, change_in_working_cap)
+        reinvestment.append(test[-1])
+        # reinvestment.append(None)
         elem_end = total_elem + 1
         for i in range(1, elem_end):
             r = "=({next_year}{sales}-{start_year}{sales})/{sales_to_cap_ratio}".format(
