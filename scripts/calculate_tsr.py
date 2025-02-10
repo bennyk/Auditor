@@ -1,7 +1,12 @@
 import re
 from openpyxl import load_workbook, Workbook
+from openpyxl.styles.numbers import FORMAT_PERCENTAGE_00
+from openpyxl.styles import PatternFill
+from openpyxl.formatting.rule import CellIsRule, DataBarRule
 from openpyxl.utils.dataframe import dataframe_to_rows
 from bcolors import colour_print, bcolors
+from tikr_terminal import WorkWrap
+from utils import colnum_string
 
 
 def load_worksheet(path, name, sheet_name):
@@ -45,7 +50,7 @@ def calculate_tsr(header, price_close, dps, years=5):
     return tsr_values
 
 
-def write_tsr_to_excel(out_wb, tsr_values, row, name):
+def write_tsr_to_excel(out_wb, tsr_values, row, name, years):
     ws = out_wb.active
     ws.title = "TSR Report"
 
@@ -54,7 +59,36 @@ def write_tsr_to_excel(out_wb, tsr_values, row, name):
     for year, tsr in tsr_values.items():
         ws.cell(row=1, column=j).value = year
         ws.cell(row=row, column=j).value = tsr
+        ws.cell(row=row, column=j).number_format = FORMAT_PERCENTAGE_00
         j += 1
+
+    # TODO Openpyxl doesn't support conditional formatting yet
+    # apply_conditional_formatting(ws, row, years)
+
+
+def apply_conditional_formatting(ws, row, years):
+    """Apply red-green conditional formatting for TSR values."""
+    green_fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+    red_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+
+    col_letter = "B"  # Assuming TSR values are in column B (adjust accordingly)
+    max_col = colnum_string(years+1)
+
+    rule1 = DataBarRule(start_type='num', start_value=.0, end_type='num', end_value=1.0, color='FF638EC6')
+    ws.conditional_formatting.add(f"{col_letter}2:{max_col}{row}", rule1)
+
+    rule2 = DataBarRule(start_type='num', start_value=.0, end_type='num', end_value=-1.0, color='FFFF0000')
+    ws.conditional_formatting.add(f"{col_letter}2:{max_col}{row}", rule2)
+
+    # # Apply green fill for positive TSR values
+    # ws.conditional_formatting.add(
+    #     f"{col_letter}2:{max_col}{max_row}",
+    #     CellIsRule(operator="greaterThan", formula=["0"], stopIfTrue=True, fill=green_fill))
+    #
+    # # Apply red fill for negative TSR values
+    # ws.conditional_formatting.add(
+    #     f"{col_letter}2:{max_col}{max_row}",
+    #     CellIsRule(operator="lessThan", formula=["0"], stopIfTrue=True, fill=red_fill))
 
 
 def main():
@@ -67,9 +101,9 @@ def main():
         print(f"Loaded worksheet: {name}")
         data = extract_data(ws, ['Income Statement | TIKR.com', 'Dividends per share', 'Price Close'])
         if 'Dividends per share' in data and 'Price Close' in data:
-            years = 4
-            # years = 6
-            # years = 9
+            # years = 4
+            # years = 5
+            years = 9
             try:
                 tsr_values = calculate_tsr(
                     data['Income Statement | TIKR.com'],
@@ -80,7 +114,7 @@ def main():
                 for year, tsr in tsr_values.items():
                     print(f"{year}: TSR = {tsr:.2%}")
 
-                write_tsr_to_excel(out_wb, tsr_values, row=row, name=name)
+                write_tsr_to_excel(out_wb, tsr_values, row=row, name=name, years=years)
                 row += 1
                 print("TSR values written to Excel successfully.")
             except IndexError as msg:
