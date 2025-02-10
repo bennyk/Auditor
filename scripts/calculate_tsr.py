@@ -1,11 +1,9 @@
 import re
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles.numbers import FORMAT_PERCENTAGE_00
-from openpyxl.styles import PatternFill
-from openpyxl.formatting.rule import CellIsRule, DataBarRule
+from openpyxl.formatting.rule import FormatObject, DataBar, Rule
 from openpyxl.utils.dataframe import dataframe_to_rows
 from bcolors import colour_print, bcolors
-from tikr_terminal import WorkWrap
 from utils import colnum_string
 
 
@@ -67,28 +65,43 @@ def write_tsr_to_excel(out_wb, tsr_values, row, name, years):
 
 
 def apply_conditional_formatting(ws, row, years):
-    """Apply red-green conditional formatting for TSR values."""
-    green_fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
-    red_fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+    """
+    Applies conditional formatting with data bars to an Excel file using openpyxl,
+    coloring negative percentages with a red bar and positive percentages with a green bar.
+    """
 
-    col_letter = "B"  # Assuming TSR values are in column B (adjust accordingly)
-    max_col = colnum_string(years+1)
+    # Determine the range of cells to apply formatting to (excluding headers)
+    start_row = 2
+    end_row = row+1
+    start_col = 1
+    end_col = years+1
 
-    rule1 = DataBarRule(start_type='num', start_value=.0, end_type='num', end_value=1.0, color='FF638EC6')
-    ws.conditional_formatting.add(f"{col_letter}2:{max_col}{row}", rule1)
+    for col_idx in range(start_col, end_col + 1):
+        col = colnum_string(col_idx)
+        cell_range = f"{col}{start_row}:{col}{end_row}"
 
-    rule2 = DataBarRule(start_type='num', start_value=.0, end_type='num', end_value=-1.0, color='FFFF0000')
-    ws.conditional_formatting.add(f"{col_letter}2:{max_col}{row}", rule2)
+        # Define data bar formatting rules
+        # Define the parameters for the positive data bar
+        first_green = FormatObject(type='min')
+        second_green = FormatObject(type='max')
+        data_bar_green = DataBar(cfvo=[first_green, second_green], color="00FF00", showValue=None, minLength=None, maxLength=None) # Green
 
-    # # Apply green fill for positive TSR values
-    # ws.conditional_formatting.add(
-    #     f"{col_letter}2:{max_col}{max_row}",
-    #     CellIsRule(operator="greaterThan", formula=["0"], stopIfTrue=True, fill=green_fill))
-    #
-    # # Apply red fill for negative TSR values
-    # ws.conditional_formatting.add(
-    #     f"{col_letter}2:{max_col}{max_row}",
-    #     CellIsRule(operator="lessThan", formula=["0"], stopIfTrue=True, fill=red_fill))
+        # Create the rule for positive values
+        rule_green = Rule(type='dataBar', dataBar=data_bar_green)
+
+        # Apply the rule to the desired range
+        ws.conditional_formatting.add(cell_range, rule_green)
+
+        # Define the parameters for the negative data bar
+        first_red = FormatObject(type='min')
+        second_red = FormatObject(type='max')
+        data_bar_red = DataBar(cfvo=[first_red, second_red], color="FF0000", showValue=None, minLength=None, maxLength=None) # Red
+
+        # Create the rule for negative  values
+        rule_red = Rule(type='dataBar', dataBar=data_bar_red)
+
+        # Apply the rule to the desired range
+        ws.conditional_formatting.add(cell_range, rule_red)
 
 
 def main():
