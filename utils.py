@@ -113,14 +113,21 @@ def zsum(a):
 
 def get_symbol(query, preferred_exchange=''):
     try:
-        data = yq.search(query)
-    except ValueError: # Will catch JSONDecodeError
+        data = None
+        for i in range(2):
+            if i == 1:
+                query = query.replace("Berhad", 'Bhd')
+            data = yq.search(query)
+            if len(data['quotes']) > 0:
+                break
+    except ValueError:  # Will catch JSONDecodeError
         print(query)
     else:
         quotes = data['quotes']
         if len(quotes) == 0:
-            return 'No Symbol Found'
+            raise ValueError('No Symbol Found')
 
+        info = quotes[0]
         symbol = quotes[0]['symbol']
         if len(quotes) >= 1:
             if len(quotes) > 1:
@@ -130,10 +137,11 @@ def get_symbol(query, preferred_exchange=''):
                 if not re.match('OTC Market', quote['exchDisp']):
                     print("One possible match is \"{shortname}\" and {symbol}".format(
                         shortname=quote['shortname'], symbol=quote['symbol']))
+                    info = quote
                     symbol = quote['symbol']
                     break
         else:
             assert symbol is not None
-        return symbol
+        return symbol, info
 
 
