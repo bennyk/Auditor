@@ -2,7 +2,7 @@ import re
 
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles.numbers import FORMAT_NUMBER_00, FORMAT_PERCENTAGE_00
-from utils import colnum_string
+from utils import colnum_string, list_over_list
 
 path = '../spreads'
 
@@ -12,9 +12,9 @@ class ExcelSheet:
         self.data = {}
         pass
 
-    def extract_data(self, ws, target_labels):
+    def extract_data(self, ws, target_labels, tag):
         max_row, max_column = ws.max_row + 1, ws.max_column + 1
-        self.data = {label: [] for label in target_labels}
+        data = {label: [] for label in target_labels}
 
         for i in range(1, max_row):
             row_label = ws[f'A{i}'].value
@@ -24,13 +24,14 @@ class ExcelSheet:
                     if row_label == 'Price Close' and value is not None:
                         # Data was extracted from TIKR terminal
                         value = float(re.sub(r'MYR\s+', '', value)) if isinstance(value, str) else value
-                    self.data[row_label].append(value)
+                    data[row_label].append(value)
+        self.data[tag] = data
         pass
 
     def parse_statement(self, name):
         wb = load_workbook(f"{path}/{name}.xlsx")
-        self.data = {}
         income_sheet = wb['Income']
+        balance_sheet = wb['Balance']
 
         for row in range(1, income_sheet.max_row+1):
             self.extract_data(income_sheet, ['Income Statement | TIKR.com',
@@ -41,7 +42,13 @@ class ExcelSheet:
                                              r'Market Cap',
                                              r'Price Close',
                                              r'Dividends per share',
-                                             ])
+                                             ], 'Income')
+
+        for row in range(1, balance_sheet.max_row + 1):
+            self.extract_data(balance_sheet, ['Balance Sheet | TIKR.com',
+                                              r'Total Debt',
+                                              r'Total Assets',
+                                              ], "Balance")
         pass
 
     def write_save(self):
@@ -69,41 +76,52 @@ class ExcelSheet:
         ws.cell(row=dps, column=1).value = "Dividends per share (sen)"
         ws.cell(row=11, column=1).value = "Dividends yield %"
         # ws.cell(row=11, column=1).value = "Dividends payout rate %"
-        for i in range(len(self.data["Income Statement | TIKR.com"])):
-            ws.cell(row=1, column=j).value = self.data[r'Income Statement | TIKR.com'][i]
+        data = self.data["Income"]
+        for i in range(len(data[r'Income Statement | TIKR.com'])):
+            ws.cell(row=1, column=j).value = data[r'Income Statement | TIKR.com'][i]
 
-            ws.cell(row=2, column=j).value = self.data[r'Total Revenues'][i]
+            ws.cell(row=2, column=j).value = data[r'Total Revenues'][i]
             ws.cell(row=2, column=j).number_format = FORMAT_NUMBER_00
 
-            ws.cell(row=3, column=j).value = self.data[r'Net Income'][i]
+            ws.cell(row=3, column=j).value = data[r'Net Income'][i]
             ws.cell(row=3, column=j).number_format = FORMAT_NUMBER_00
 
-            ws.cell(row=adj_net_income, column=j).value = self.data[r'EBT Excl. Unusual Items'][i]
+            ws.cell(row=adj_net_income, column=j).value = data[r'EBT Excl. Unusual Items'][i]
             ws.cell(row=adj_net_income, column=j).number_format = FORMAT_NUMBER_00
 
-            if self.data[WADS][i] is not None:
+            if data[WADS][i] is not None:
                 ws.cell(row=epu, column=j).value = f"=100 * {colnum_string(j)}{adj_net_income}/{colnum_string(j)}{shares_outstanding}"
                 ws.cell(row=epu, column=j).number_format = FORMAT_NUMBER_00
 
-            ws.cell(row=6, column=j).value = self.data[r'Market Cap'][i]
+            ws.cell(row=6, column=j).value = data[r'Market Cap'][i]
             ws.cell(row=6, column=j).number_format = FORMAT_NUMBER_00
 
-            ws.cell(row=price_close, column=j).value = self.data[r'Price Close'][i]
+            ws.cell(row=price_close, column=j).value = data[r'Price Close'][i]
             ws.cell(row=price_close, column=j).number_format = FORMAT_NUMBER_00
 
-            ws.cell(row=shares_outstanding, column=j).value = self.data[WADS][i]
+            ws.cell(row=shares_outstanding, column=j).value = data[WADS][i]
             ws.cell(row=shares_outstanding, column=j).number_format = FORMAT_NUMBER_00
 
-            if self.data[WADS][i] is not None:
+            if data[WADS][i] is not None:
                 ws.cell(row=9, column=j).value = f"=100*{colnum_string(j)}{price_close}/{colnum_string(j)}{epu}"
                 ws.cell(row=9, column=j).number_format = FORMAT_NUMBER_00
 
-            ws.cell(row=10, column=j).value = self.data[r'Dividends per share'][i]*100 if self.data[r'Dividends per share'][i] is not None else ''
+            ws.cell(row=10, column=j).value = data[r'Dividends per share'][i]*100 if data[r'Dividends per share'][i] is not None else ''
             ws.cell(row=10, column=j).number_format = FORMAT_NUMBER_00
 
-            if self.data[WADS][i] is not None:
+            if data[WADS][i] is not None:
                 ws.cell(row=11, column=j).value = f"={colnum_string(j)}{dps}/{colnum_string(j)}{price_close}/100"
                 ws.cell(row=11, column=j).number_format = FORMAT_PERCENTAGE_00
+            j += 1
+
+        j = 2
+        ws.cell(row=14, column=1).value = "Debt to Assets %"
+        data = self.data["Balance"]
+        for i in range(len(data[r'Balance Sheet | TIKR.com'])):
+            ws.cell(row=13, column=j).value = data[r'Balance Sheet | TIKR.com'][i]
+
+            ws.cell(row=14, column=j).value = data["Total Debt"][i] / data["Total Assets"][i]
+            ws.cell(row=14, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
         out_wb.save(f"xyz_report.xlsx")
 
