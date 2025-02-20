@@ -60,68 +60,86 @@ class ExcelSheet:
         ws.column_dimensions["A"].width = 25
 
         j = 2
-        adj_net_income = 4
-        epu = 5
-        price_close = 7
-        shares_outstanding = 8
-        dps = 10
-        ws.cell(row=2, column=1).value = "Total revenues"
-        ws.cell(row=3, column=1).value = "Net income"
-        ws.cell(row=adj_net_income, column=1).value = "Adj. net income"
-        ws.cell(row=epu, column=1).value = "Adj. EPU (sen)"
-        ws.cell(row=6, column=1).value = "Market Cap"
-        ws.cell(row=price_close, column=1).value = "Price Close"
-        ws.cell(row=shares_outstanding, column=1).value = "Shares outstanding"
-        ws.cell(row=9, column=1).value = "PER"
-        ws.cell(row=dps, column=1).value = "Dividends per share (sen)"
-        ws.cell(row=11, column=1).value = "Dividends yield %"
+        total_revenues_idx = 2
+        net_income_idx = 3
+        adj_net_income_idx = 4
+        epu_idx = 5
+        epu_sen_idx = 6
+        market_cap_idx = 7
+        price_close_idx = 8
+        shares_outstanding_idx = 9
+        per_idx = 10
+        dps_idx = 11
+        dps_sen_idx = 12
+        div_yield_idx = 13
+
+        ws.cell(row=total_revenues_idx, column=1).value = "Total revenues"
+        ws.cell(row=net_income_idx, column=1).value = "Net income"
+        ws.cell(row=adj_net_income_idx, column=1).value = "Adj. net income"
+        ws.cell(row=epu_idx, column=1).value = "Adj. EPU"
+        ws.cell(row=epu_sen_idx, column=1).value = "Adj. EPU (sen)"
+        ws.cell(row=market_cap_idx, column=1).value = "Market Cap"
+        ws.cell(row=price_close_idx, column=1).value = "Price Close"
+        ws.cell(row=shares_outstanding_idx, column=1).value = "Shares outstanding"
+        ws.cell(row=per_idx, column=1).value = "PER"
+        ws.cell(row=dps_idx, column=1).value = "Dividends per share"
+        ws.cell(row=dps_sen_idx, column=1).value = "Dividends per share (sen)"
+        ws.cell(row=div_yield_idx, column=1).value = "Dividends yield %"
         # ws.cell(row=11, column=1).value = "Dividends payout rate %"
+
         data = self.data["Income"]
         for i in range(len(data[r'Income Statement | TIKR.com'])):
             ws.cell(row=1, column=j).value = data[r'Income Statement | TIKR.com'][i]
 
-            ws.cell(row=2, column=j).value = data[r'Total Revenues'][i]
-            ws.cell(row=2, column=j).number_format = FORMAT_NUMBER_00
+            ws.cell(row=total_revenues_idx, column=j).value = data[r'Total Revenues'][i]
+            ws.cell(row=total_revenues_idx, column=j).number_format = FORMAT_NUMBER_00
 
-            ws.cell(row=3, column=j).value = data[r'Net Income'][i]
-            ws.cell(row=3, column=j).number_format = FORMAT_NUMBER_00
+            ws.cell(row=net_income_idx, column=j).value = data[r'Net Income'][i]
+            ws.cell(row=net_income_idx, column=j).number_format = FORMAT_NUMBER_00
 
-            ws.cell(row=adj_net_income, column=j).value = data[r'EBT Excl. Unusual Items'][i]
-            ws.cell(row=adj_net_income, column=j).number_format = FORMAT_NUMBER_00
-
-            if data[WADS][i] is not None:
-                ws.cell(row=epu, column=j).value = f"=100 * {colnum_string(j)}{adj_net_income}/{colnum_string(j)}{shares_outstanding}"
-                ws.cell(row=epu, column=j).number_format = FORMAT_NUMBER_00
-
-            ws.cell(row=6, column=j).value = data[r'Market Cap'][i]
-            ws.cell(row=6, column=j).number_format = FORMAT_NUMBER_00
-
-            ws.cell(row=price_close, column=j).value = data[r'Price Close'][i]
-            ws.cell(row=price_close, column=j).number_format = FORMAT_NUMBER_00
-
-            ws.cell(row=shares_outstanding, column=j).value = data[WADS][i]
-            ws.cell(row=shares_outstanding, column=j).number_format = FORMAT_NUMBER_00
+            ws.cell(row=adj_net_income_idx, column=j).value = data[r'EBT Excl. Unusual Items'][i]
+            ws.cell(row=adj_net_income_idx, column=j).number_format = FORMAT_NUMBER_00
 
             if data[WADS][i] is not None:
-                ws.cell(row=9, column=j).value = f"=100*{colnum_string(j)}{price_close}/{colnum_string(j)}{epu}"
-                ws.cell(row=9, column=j).number_format = FORMAT_NUMBER_00
+                ws.cell(row=epu_idx, column=j).value = f"={colnum_string(j)}{adj_net_income_idx}/{colnum_string(j)}{shares_outstanding_idx}"
+                ws.cell(row=epu_idx, column=j).number_format = '0.0000'
 
-            ws.cell(row=10, column=j).value = data[r'Dividends per share'][i]*100 if data[r'Dividends per share'][i] is not None else ''
-            ws.cell(row=10, column=j).number_format = FORMAT_NUMBER_00
+                ws.cell(row=epu_sen_idx, column=j).value = f"=100*{colnum_string(j)}{epu_idx}"
+                ws.cell(row=epu_sen_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            ws.cell(row=market_cap_idx, column=j).value = data[r'Market Cap'][i]
+            ws.cell(row=market_cap_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            ws.cell(row=price_close_idx, column=j).value = data[r'Price Close'][i]
+            ws.cell(row=price_close_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            ws.cell(row=shares_outstanding_idx, column=j).value = data[WADS][i]
+            ws.cell(row=shares_outstanding_idx, column=j).number_format = FORMAT_NUMBER_00
 
             if data[WADS][i] is not None:
-                ws.cell(row=11, column=j).value = f"={colnum_string(j)}{dps}/{colnum_string(j)}{price_close}/100"
-                ws.cell(row=11, column=j).number_format = FORMAT_PERCENTAGE_00
+                ws.cell(row=per_idx, column=j).value = f"={colnum_string(j)}{price_close_idx}/{colnum_string(j)}{epu_idx}"
+                ws.cell(row=per_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            ws.cell(row=dps_idx, column=j).value = data[r'Dividends per share'][i] if data[r'Dividends per share'][i] is not None else ''
+            ws.cell(row=dps_idx, column=j).number_format = '0.0000'
+
+            ws.cell(row=dps_sen_idx, column=j).value = f"=100*{colnum_string(j)}{dps_idx}"
+            ws.cell(row=dps_sen_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            if data[WADS][i] is not None:
+                ws.cell(row=div_yield_idx, column=j).value = f"={colnum_string(j)}{dps_idx}/{colnum_string(j)}{price_close_idx}"
+                ws.cell(row=div_yield_idx, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
 
         j = 2
-        ws.cell(row=14, column=1).value = "Debt to Assets %"
+        debt_to_assets_idx = 16
+        ws.cell(row=debt_to_assets_idx, column=1).value = "Debt to Assets %"
         data = self.data["Balance"]
         for i in range(len(data[r'Balance Sheet | TIKR.com'])):
-            ws.cell(row=13, column=j).value = data[r'Balance Sheet | TIKR.com'][i]
+            ws.cell(row=15, column=j).value = data[r'Balance Sheet | TIKR.com'][i]
 
-            ws.cell(row=14, column=j).value = data["Total Debt"][i] / data["Total Assets"][i]
-            ws.cell(row=14, column=j).number_format = FORMAT_PERCENTAGE_00
+            ws.cell(row=debt_to_assets_idx, column=j).value = data["Total Debt"][i] / data["Total Assets"][i]
+            ws.cell(row=debt_to_assets_idx, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
         out_wb.save(f"xyz_report.xlsx")
 
