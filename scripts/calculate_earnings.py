@@ -86,24 +86,28 @@ class ExcelSheet:
 
         j = 2
         total_revenues_idx = 2
-        net_income_idx = 3
-        adj_net_income_idx = 4
-        epu_idx = 5
-        epu_sen_idx = 6
-        market_cap_idx = 7
-        price_close_idx = 8
-        shares_outstanding_idx = 9
-        per_idx = 10
-        dps_idx = 11
-        dps_sen_idx = 12
-        div_yield_idx = 13
+        revenues_growth_idx = 3
+        net_income_idx = 4
+        adj_net_income_idx = 5
+        epu_idx = 6
+        epu_sen_idx = 7
+        epu_sen_growth_idx = 8
+        market_cap_idx = 9
+        price_close_idx = 10
+        shares_outstanding_idx = 11
+        per_idx = 12
+        dps_idx = 13
+        dps_sen_idx = 14
+        div_yield_idx = 15
 
         ws.cell(row=1, column=1).value = "Income items / end of year"
-        ws.cell(row=total_revenues_idx, column=1).value = "Total revenues"
+        ws.cell(row=total_revenues_idx, column=1).value = "Total sales"
+        ws.cell(row=revenues_growth_idx, column=1).value = "  Sales growth %"
         ws.cell(row=net_income_idx, column=1).value = "Net income"
         ws.cell(row=adj_net_income_idx, column=1).value = "Adj. net income"
         ws.cell(row=epu_idx, column=1).value = "Adj. EPU"
         ws.cell(row=epu_sen_idx, column=1).value = "Adj. EPU (sen)"
+        ws.cell(row=epu_sen_growth_idx, column=1).value = "  EPU growth %"
         ws.cell(row=market_cap_idx, column=1).value = "Market Cap"
         ws.cell(row=price_close_idx, column=1).value = "Price Close"
         ws.cell(row=shares_outstanding_idx, column=1).value = "Shares outstanding"
@@ -120,6 +124,11 @@ class ExcelSheet:
             ws.cell(row=total_revenues_idx, column=j).value = data[r'Total Revenues'][i]
             ws.cell(row=total_revenues_idx, column=j).number_format = FORMAT_NUMBER_00
 
+            if i > 0 and data[r'Total Revenues'][i-1] is not None:
+                ws.cell(row=revenues_growth_idx, column=j).value =\
+                    f"={colnum_string(j)}{total_revenues_idx}/{colnum_string(j-1)}{total_revenues_idx}-1"
+                ws.cell(row=revenues_growth_idx, column=j).number_format = FORMAT_PERCENTAGE_00
+
             ws.cell(row=net_income_idx, column=j).value = data[r'Net Income'][i]
             ws.cell(row=net_income_idx, column=j).number_format = FORMAT_NUMBER_00
 
@@ -132,6 +141,11 @@ class ExcelSheet:
 
                 ws.cell(row=epu_sen_idx, column=j).value = f"=100*{colnum_string(j)}{epu_idx}"
                 ws.cell(row=epu_sen_idx, column=j).number_format = FORMAT_NUMBER_00
+
+                if data[WADS][i-1] is not None:
+                    ws.cell(row=epu_sen_growth_idx, column=j).value = \
+                        f"={colnum_string(j)}{epu_sen_idx}/{colnum_string(j-1)}{epu_sen_idx}-1"
+                    ws.cell(row=epu_sen_growth_idx, column=j).number_format = FORMAT_PERCENTAGE_00
 
             ws.cell(row=market_cap_idx, column=j).value = data[r'Market Cap'][i]
             ws.cell(row=market_cap_idx, column=j).number_format = FORMAT_NUMBER_00
@@ -162,13 +176,13 @@ class ExcelSheet:
         b = self.parse_header_year("Cash")
         j = 2 + b - a
 
-        ffo_idx = 16
-        ffo_per_share_idx = 17
-        p_over_ffo_idx = 18
-        affo_idx = 20
-        affo_per_share_idx = 21
-        p_over_affo_idx = 22
-        ws.cell(row=15, column=1).value = "Cash items / end of year"
+        ffo_idx = 18
+        ffo_per_share_idx = 19
+        p_over_ffo_idx = 20
+        affo_idx = 22
+        affo_per_share_idx = 23
+        p_over_affo_idx = 24
+        ws.cell(row=17, column=1).value = "Cash items / end of year"
         ws.cell(row=ffo_idx, column=1).value = "FFO"
         ws.cell(row=ffo_per_share_idx, column=1).value = "FFO per share"
         ws.cell(row=p_over_ffo_idx, column=1).value = "P/FFO per share"
@@ -179,7 +193,7 @@ class ExcelSheet:
 
         data = self.data["Cash"]
         for i in range(len(data[r'Cash Flow Statement | TIKR.com'])):
-            ws.cell(row=15, column=j).value = data[r'Cash Flow Statement | TIKR.com'][i]
+            ws.cell(row=17, column=j).value = data[r'Cash Flow Statement | TIKR.com'][i]
 
             ffo = data['Net Income'][i]
             ffo += data['Total Depreciation, Depletion & Amortization'][i]
@@ -216,11 +230,12 @@ class ExcelSheet:
         a = self.parse_header_year("Income")
         b = self.parse_header_year("Balance")
         j = 2 + b - a
-        debt_to_assets_idx = 24
+        debt_to_assets_idx = 27
+        ws.cell(row=26, column=1).value = "Balance items / end of year"
         ws.cell(row=debt_to_assets_idx, column=1).value = "Debt to Assets %"
         data = self.data["Balance"]
         for i in range(len(data[r'Balance Sheet | TIKR.com'])):
-            ws.cell(row=15, column=j).value = data[r'Balance Sheet | TIKR.com'][i]
+            ws.cell(row=26, column=j).value = data[r'Balance Sheet | TIKR.com'][i]
 
             ws.cell(row=debt_to_assets_idx, column=j).value = data["Total Debt"][i] / data["Total Assets"][i]
             ws.cell(row=debt_to_assets_idx, column=j).number_format = FORMAT_PERCENTAGE_00
@@ -239,3 +254,13 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# KIPREIT TODOs
+# 1. Add line revenue growth % and EPU growth %
+# 2. P/FFO and P/AFFO
+# 3. Pick up end-of-year items when tabulating shares outstanding (WADSO).
+#    TIKR uses an average of outstanding shares instead, leading to a pessimistic/overvaluation when trading.
+# 4. Does the calculated DPU (1.544 sen) not match the reported 1.66 sen?
+
+
