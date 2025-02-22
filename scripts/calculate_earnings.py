@@ -32,6 +32,7 @@ class ExcelSheet:
         wb = load_workbook(f"{path}/{name}.xlsx")
         income_sheet = wb['Income']
         balance_sheet = wb['Balance']
+        cash_flow = wb['Cash']
 
         for row in range(1, income_sheet.max_row+1):
             self.extract_data(income_sheet, ['Income Statement | TIKR.com',
@@ -44,12 +45,36 @@ class ExcelSheet:
                                              r'Dividends per share',
                                              ], 'Income')
 
+        for row in range(1, cash_flow.max_row+1):
+            self.extract_data(cash_flow, ['Cash Flow Statement | TIKR.com',
+                                          r'Net Income',
+                                          r'Total Depreciation, Depletion & Amortization',
+                                          r'Total Asset Writedown',
+                                          r'Provision and Write-off of Bad Debts',
+                                          r'Acquisition of Real Estate Assets',
+                                          ], 'Cash')
+
         for row in range(1, balance_sheet.max_row + 1):
             self.extract_data(balance_sheet, ['Balance Sheet | TIKR.com',
                                               r'Total Debt',
                                               r'Total Assets',
                                               ], "Balance")
         pass
+
+    def parse_header_year(self, head):
+        tikr_header = None
+        if head == "Income":
+            tikr_header = 'Income Statement | TIKR.com'
+        elif head == "Balance":
+            tikr_header = 'Balance Sheet | TIKR.com'
+        elif head == "Cash":
+            tikr_header = 'Cash Flow Statement | TIKR.com'
+        else:
+            raise "Invalid header"
+
+        m = re.search(r'(\d{2})$', self.data[head][tikr_header][0])
+        assert m is not None
+        return int(m.group(1))
 
     def write_save(self):
         out_wb = Workbook()
@@ -73,6 +98,7 @@ class ExcelSheet:
         dps_sen_idx = 12
         div_yield_idx = 13
 
+        ws.cell(row=1, column=1).value = "Income items / end of year"
         ws.cell(row=total_revenues_idx, column=1).value = "Total revenues"
         ws.cell(row=net_income_idx, column=1).value = "Net income"
         ws.cell(row=adj_net_income_idx, column=1).value = "Adj. net income"
@@ -131,8 +157,66 @@ class ExcelSheet:
                 ws.cell(row=div_yield_idx, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
 
-        j = 2
-        debt_to_assets_idx = 16
+        # Income header year minus Cash header year. Years offset adjustment to IPO since pre listing.
+        a = self.parse_header_year("Income")
+        b = self.parse_header_year("Cash")
+        j = 2 + b - a
+
+        ffo_idx = 16
+        ffo_per_share_idx = 17
+        p_over_ffo_idx = 18
+        affo_idx = 20
+        affo_per_share_idx = 21
+        p_over_affo_idx = 22
+        ws.cell(row=15, column=1).value = "Cash items / end of year"
+        ws.cell(row=ffo_idx, column=1).value = "FFO"
+        ws.cell(row=ffo_per_share_idx, column=1).value = "FFO per share"
+        ws.cell(row=p_over_ffo_idx, column=1).value = "P/FFO per share"
+
+        ws.cell(row=affo_idx, column=1).value = "AFFO"
+        ws.cell(row=affo_per_share_idx, column=1).value = "AFFO per share"
+        ws.cell(row=p_over_affo_idx, column=1).value = "P/AFFO"
+
+        data = self.data["Cash"]
+        for i in range(len(data[r'Cash Flow Statement | TIKR.com'])):
+            ws.cell(row=15, column=j).value = data[r'Cash Flow Statement | TIKR.com'][i]
+
+            ffo = data['Net Income'][i]
+            ffo += data['Total Depreciation, Depletion & Amortization'][i]
+            if data['Total Asset Writedown'][i] is not None:
+                ffo += data['Total Asset Writedown'][i]
+
+            if data['Provision and Write-off of Bad Debts'][i] is not None:
+                ffo += data['Provision and Write-off of Bad Debts'][i]
+
+            ws.cell(row=ffo_idx, column=j).value = ffo
+            ws.cell(row=ffo_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            ws.cell(row=ffo_per_share_idx, column=j).value = \
+                f"={colnum_string(j)}{ffo_idx} / {colnum_string(j)}{shares_outstanding_idx}"
+            ws.cell(row=ffo_per_share_idx, column=j).number_format = '0.0000'
+
+            ws.cell(row=p_over_ffo_idx, column=j).value = f"={colnum_string(j)}{price_close_idx} / {colnum_string(j)}{ffo_per_share_idx}"
+            ws.cell(row=p_over_ffo_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            affo = ffo
+            affo += data['Acquisition of Real Estate Assets'][i]
+            ws.cell(row=affo_idx, column=j).value = affo
+            ws.cell(row=affo_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            ws.cell(row=affo_per_share_idx, column=j).value =\
+                f"={colnum_string(j)}{affo_idx} / {colnum_string(j)}{shares_outstanding_idx}"
+            ws.cell(row=affo_per_share_idx, column=j).number_format = '0.0000'
+
+            ws.cell(row=p_over_affo_idx, column=j).value =\
+                f"={colnum_string(j)}{price_close_idx} / {colnum_string(j)}{affo_per_share_idx}"
+            ws.cell(row=p_over_affo_idx, column=j).number_format = FORMAT_NUMBER_00
+            j += 1
+
+        a = self.parse_header_year("Income")
+        b = self.parse_header_year("Balance")
+        j = 2 + b - a
+        debt_to_assets_idx = 24
         ws.cell(row=debt_to_assets_idx, column=1).value = "Debt to Assets %"
         data = self.data["Balance"]
         for i in range(len(data[r'Balance Sheet | TIKR.com'])):
