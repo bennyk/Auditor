@@ -142,7 +142,7 @@ class ExcelSheet:
                 ws.cell(row=epu_sen_idx, column=j).value = f"=100*{colnum_string(j)}{epu_idx}"
                 ws.cell(row=epu_sen_idx, column=j).number_format = FORMAT_NUMBER_00
 
-                if data[WADS][i-1] is not None:
+                if i > 0 and data[WADS][i-1] is not None:
                     ws.cell(row=epu_sen_growth_idx, column=j).value = \
                         f"={colnum_string(j)}{epu_sen_idx}/{colnum_string(j-1)}{epu_sen_idx}-1"
                     ws.cell(row=epu_sen_growth_idx, column=j).number_format = FORMAT_PERCENTAGE_00
@@ -197,11 +197,12 @@ class ExcelSheet:
 
             ffo = data['Net Income'][i]
             ffo += data['Total Depreciation, Depletion & Amortization'][i]
-            if data['Total Asset Writedown'][i] is not None:
-                ffo += data['Total Asset Writedown'][i]
+            if len(data['Total Asset Writedown']) > 0:
+                if data['Total Asset Writedown'][i] is not None:
+                    ffo += data['Total Asset Writedown'][i]
 
-            if data['Provision and Write-off of Bad Debts'][i] is not None:
-                ffo += data['Provision and Write-off of Bad Debts'][i]
+                if data['Provision and Write-off of Bad Debts'][i] is not None:
+                    ffo += data['Provision and Write-off of Bad Debts'][i]
 
             ws.cell(row=ffo_idx, column=j).value = ffo
             ws.cell(row=ffo_idx, column=j).number_format = FORMAT_NUMBER_00
