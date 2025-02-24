@@ -1,4 +1,5 @@
 import re
+from typing import List
 
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles.numbers import FORMAT_NUMBER_00, FORMAT_PERCENTAGE_00
@@ -10,6 +11,7 @@ path = '../spreads'
 class ExcelSheet:
     def __init__(self):
         self.data = {}
+        self.row_idx = 0
         pass
 
     def extract_data(self, ws, target_labels, tag):
@@ -76,6 +78,10 @@ class ExcelSheet:
         assert m is not None
         return int(m.group(1))
 
+    def add_row_idx(self):
+        self.row_idx += 1
+        return self.row_idx
+
     def write_save(self):
         out_wb = Workbook()
         ws = out_wb.active
@@ -85,22 +91,23 @@ class ExcelSheet:
         ws.column_dimensions["A"].width = 25
 
         j = 2
-        total_revenues_idx = 2
-        revenues_growth_idx = 3
-        net_income_idx = 4
-        adj_net_income_idx = 5
-        epu_idx = 6
-        epu_sen_idx = 7
-        epu_sen_growth_idx = 8
-        market_cap_idx = 9
-        price_close_idx = 10
-        shares_outstanding_idx = 11
-        per_idx = 12
-        dps_idx = 13
-        dps_sen_idx = 14
-        div_yield_idx = 15
+        income_items_idx = self.add_row_idx()
+        total_revenues_idx = self.add_row_idx()
+        revenues_growth_idx = self.add_row_idx()
+        net_income_idx = self.add_row_idx()
+        adj_net_income_idx = self.add_row_idx()
+        epu_idx = self.add_row_idx()
+        epu_sen_idx = self.add_row_idx()
+        epu_sen_growth_idx = self.add_row_idx()
+        market_cap_idx = self.add_row_idx()
+        price_close_idx = self.add_row_idx()
+        shares_outstanding_idx = self.add_row_idx()
+        per_idx = self.add_row_idx()
+        dps_idx = self.add_row_idx()
+        dps_sen_idx = self.add_row_idx()
+        div_yield_idx = self.add_row_idx()
 
-        ws.cell(row=1, column=1).value = "Income items / end of year"
+        ws.cell(row=income_items_idx, column=1).value = "Income items / end of year"
         ws.cell(row=total_revenues_idx, column=1).value = "Total sales"
         ws.cell(row=revenues_growth_idx, column=1).value = "  Sales growth %"
         ws.cell(row=net_income_idx, column=1).value = "Net income"
@@ -119,7 +126,7 @@ class ExcelSheet:
 
         data = self.data["Income"]
         for i in range(len(data[r'Income Statement | TIKR.com'])):
-            ws.cell(row=1, column=j).value = data[r'Income Statement | TIKR.com'][i]
+            ws.cell(row=income_items_idx, column=j).value = data[r'Income Statement | TIKR.com'][i]
 
             ws.cell(row=total_revenues_idx, column=j).value = data[r'Total Revenues'][i]
             ws.cell(row=total_revenues_idx, column=j).number_format = FORMAT_NUMBER_00
@@ -176,13 +183,18 @@ class ExcelSheet:
         b = self.parse_header_year("Cash")
         j = 2 + b - a
 
-        ffo_idx = 18
-        ffo_per_share_idx = 19
-        p_over_ffo_idx = 20
-        affo_idx = 22
-        affo_per_share_idx = 23
-        p_over_affo_idx = 24
-        ws.cell(row=17, column=1).value = "Cash items / end of year"
+        self.row_idx += 1
+        cash_items_idx = self.add_row_idx()
+        ffo_idx = self.add_row_idx()
+        ffo_per_share_idx = self.add_row_idx()
+        p_over_ffo_idx = self.add_row_idx()
+
+        self.row_idx += 1
+        affo_idx = self.add_row_idx()
+        affo_per_share_idx = self.add_row_idx()
+        p_over_affo_idx = self.add_row_idx()
+
+        ws.cell(row=cash_items_idx, column=1).value = "Cash items / end of year"
         ws.cell(row=ffo_idx, column=1).value = "FFO"
         ws.cell(row=ffo_per_share_idx, column=1).value = "FFO per share"
         ws.cell(row=p_over_ffo_idx, column=1).value = "P/FFO per share"
@@ -193,7 +205,7 @@ class ExcelSheet:
 
         data = self.data["Cash"]
         for i in range(len(data[r'Cash Flow Statement | TIKR.com'])):
-            ws.cell(row=17, column=j).value = data[r'Cash Flow Statement | TIKR.com'][i]
+            ws.cell(row=cash_items_idx, column=j).value = data[r'Cash Flow Statement | TIKR.com'][i]
 
             ffo = data['Net Income'][i]
             ffo += data['Total Depreciation, Depletion & Amortization'][i]
@@ -231,12 +243,15 @@ class ExcelSheet:
         a = self.parse_header_year("Income")
         b = self.parse_header_year("Balance")
         j = 2 + b - a
-        debt_to_assets_idx = 27
-        ws.cell(row=26, column=1).value = "Balance items / end of year"
+        self.row_idx += 1
+        balance_items_idx = self.add_row_idx()
+        debt_to_assets_idx = self.add_row_idx()
+
+        ws.cell(row=balance_items_idx, column=1).value = "Balance items / end of year"
         ws.cell(row=debt_to_assets_idx, column=1).value = "Debt to Assets %"
         data = self.data["Balance"]
         for i in range(len(data[r'Balance Sheet | TIKR.com'])):
-            ws.cell(row=26, column=j).value = data[r'Balance Sheet | TIKR.com'][i]
+            ws.cell(row=balance_items_idx, column=j).value = data[r'Balance Sheet | TIKR.com'][i]
 
             ws.cell(row=debt_to_assets_idx, column=j).value = data["Total Debt"][i] / data["Total Assets"][i]
             ws.cell(row=debt_to_assets_idx, column=j).number_format = FORMAT_PERCENTAGE_00
