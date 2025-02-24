@@ -82,10 +82,9 @@ class ExcelSheet:
         self.row_idx += 1
         return self.row_idx
 
-    def write_save(self):
-        out_wb = Workbook()
-        ws = out_wb.active
-        ws.title = "Earnings summary"
+    def write(self, out_wb, title):
+        ws = out_wb.create_sheet(title)
+        self.row_idx = 0
 
         WADS = r'Weighted Average Diluted Shares Outstanding'
         ws.column_dimensions["A"].width = 25
@@ -256,16 +255,17 @@ class ExcelSheet:
             ws.cell(row=debt_to_assets_idx, column=j).value = data["Total Debt"][i] / data["Total Assets"][i]
             ws.cell(row=debt_to_assets_idx, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
-        out_wb.save(f"xyz_report.xlsx")
 
 
 def main():
     sheet = ExcelSheet()
+    out_wb = Workbook()
+    del out_wb['Sheet']
 
-    # for name in ['kipreit', 'igbreit', 'klcc', 'sunreit', 'axreit']:
-    for name in ['kipreit']:
+    for name in ['kipreit', 'igbreit', 'klcc', 'sunreit', 'axreit']:
         sheet.parse_statement(name)
-        sheet.write_save()
+        sheet.write(out_wb, name)
+    out_wb.save(f"xyz_report.xlsx")
 
 
 if __name__ == "__main__":
