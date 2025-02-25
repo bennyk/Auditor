@@ -8,6 +8,19 @@ from utils import colnum_string, list_over_list
 path = '../spreads'
 
 
+class CAGR:
+    def __init__(self, ws, j, start_idx):
+        self.ws = ws
+        self.j = j
+        self.start_idx = start_idx
+
+    def calculate(self, idx):
+        self.ws.cell(row=idx, column=self.j).value = \
+            (f"=(({colnum_string(self.j - 1)}{idx}/{colnum_string(self.start_idx)}{idx})"
+             f"^(1/COLUMNS({colnum_string(self.start_idx)}{idx}:{colnum_string(self.j - 1)}{idx}))-1)")
+        self.ws.cell(row=idx, column=self.j).number_format = FORMAT_PERCENTAGE_00
+
+
 class ExcelSheet:
     def __init__(self):
         self.data = {}
@@ -81,6 +94,12 @@ class ExcelSheet:
     def add_row_idx(self):
         self.row_idx += 1
         return self.row_idx
+
+    def calculate_cagr(self, j, start_idx, idx, ws):
+        ws.cell(row=idx, column=j).value = \
+            (f"=(({colnum_string(j-1)}{idx}/{colnum_string(start_idx)}{idx})"
+             f"^(1/COLUMNS({colnum_string(start_idx)}{idx}:{colnum_string(j-1)}{idx}))-1)")
+        ws.cell(row=idx, column=j).number_format = FORMAT_PERCENTAGE_00
 
     def write(self, out_wb, title):
         ws = out_wb.create_sheet(title)
@@ -190,6 +209,17 @@ class ExcelSheet:
                 ws.cell(row=div_yield_idx, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
 
+        # =(M2/D2)^(1/COLUMNS(D2:M2))-1
+        start_idx = j-9
+        # start_idx = j-11
+        ws.cell(row=1, column=j).value = "CAGR"
+
+        cagr_cal = CAGR(ws, j, start_idx)
+        cagr_cal.calculate(total_revenues_idx)
+        cagr_cal.calculate(adj_net_income_idx)
+        cagr_cal.calculate(epu_idx)
+        cagr_cal.calculate(dps_idx)
+
         # Income header year minus Cash header year. Years offset adjustment to IPO since pre listing.
         a = self.parse_header_year("Income")
         b = self.parse_header_year("Cash")
@@ -213,7 +243,7 @@ class ExcelSheet:
 
         ws.cell(row=affo_idx, column=1).value = "AFFO"
         ws.cell(row=affo_per_share_idx, column=1).value = "AFFO per share"
-        ws.cell(row=p_over_affo_idx, column=1).value = "P/AFFO"
+        ws.cell(row=p_over_affo_idx, column=1).value = "P/AFFO per share"
 
         data = self.data["Cash"]
         for i in range(len(data[r'Cash Flow Statement | TIKR.com'])):
