@@ -64,7 +64,7 @@ class Dividend(Spread):
         self.spread = _Spread(spread, tick)
         self.shares_out = self.income.match_title('Weighted Average Diluted Shares Outstanding')
         self.div_paid = self.cashflow.match_title('Common Dividends Paid')
-        self.ticker = yf.Ticker(get_symbol(self.tick))
+        self.ticker = yf.Ticker(get_symbol(self.tick)[0])
         self.mcap = self.ticker.info['marketCap'] / 1e6
 
     def trim_estimates(self, title, **kwargs):
