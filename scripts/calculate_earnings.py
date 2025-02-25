@@ -95,12 +95,14 @@ class ExcelSheet:
         revenues_growth_idx = self.add_row_idx()
         net_income_idx = self.add_row_idx()
         adj_net_income_idx = self.add_row_idx()
+        adj_net_margin_idx = self.add_row_idx()
         epu_idx = self.add_row_idx()
         epu_sen_idx = self.add_row_idx()
         epu_sen_growth_idx = self.add_row_idx()
         market_cap_idx = self.add_row_idx()
         price_close_idx = self.add_row_idx()
         shares_outstanding_idx = self.add_row_idx()
+        shares_outstanding_growth_idx = self.add_row_idx()
         per_idx = self.add_row_idx()
         dps_idx = self.add_row_idx()
         dps_sen_idx = self.add_row_idx()
@@ -108,15 +110,17 @@ class ExcelSheet:
 
         ws.cell(row=income_items_idx, column=1).value = "Income items / end of year"
         ws.cell(row=total_revenues_idx, column=1).value = "Total sales"
-        ws.cell(row=revenues_growth_idx, column=1).value = "  Sales growth %"
+        ws.cell(row=revenues_growth_idx, column=1).value = "  % Sales change YoY"
         ws.cell(row=net_income_idx, column=1).value = "Net income"
         ws.cell(row=adj_net_income_idx, column=1).value = "Adj. net income"
+        ws.cell(row=adj_net_margin_idx, column=1).value = "  % Adj. net margin"
         ws.cell(row=epu_idx, column=1).value = "Adj. EPU"
         ws.cell(row=epu_sen_idx, column=1).value = "Adj. EPU (sen)"
-        ws.cell(row=epu_sen_growth_idx, column=1).value = "  EPU growth %"
+        ws.cell(row=epu_sen_growth_idx, column=1).value = "  % EPU change YoY"
         ws.cell(row=market_cap_idx, column=1).value = "Market Cap"
         ws.cell(row=price_close_idx, column=1).value = "Price Close"
         ws.cell(row=shares_outstanding_idx, column=1).value = "Shares outstanding"
+        ws.cell(row=shares_outstanding_growth_idx, column=1).value = "  % Change YoY"
         ws.cell(row=per_idx, column=1).value = "PER"
         ws.cell(row=dps_idx, column=1).value = "Dividends per share"
         ws.cell(row=dps_sen_idx, column=1).value = "Dividends per share (sen)"
@@ -141,6 +145,10 @@ class ExcelSheet:
             ws.cell(row=adj_net_income_idx, column=j).value = data[r'EBT Excl. Unusual Items'][i]
             ws.cell(row=adj_net_income_idx, column=j).number_format = FORMAT_NUMBER_00
 
+            ws.cell(row=adj_net_margin_idx, column=j).value = \
+                f"={colnum_string(j)}{adj_net_income_idx}/{colnum_string(j)}{total_revenues_idx}"
+            ws.cell(row=adj_net_margin_idx, column=j).number_format = FORMAT_PERCENTAGE_00
+
             if data[WADS][i] is not None:
                 ws.cell(row=epu_idx, column=j).value = f"={colnum_string(j)}{adj_net_income_idx}/{colnum_string(j)}{shares_outstanding_idx}"
                 ws.cell(row=epu_idx, column=j).number_format = '0.0000'
@@ -161,6 +169,11 @@ class ExcelSheet:
 
             ws.cell(row=shares_outstanding_idx, column=j).value = data[WADS][i]
             ws.cell(row=shares_outstanding_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            if i > 1 and data[WADS][i-1] is not None and data[WADS][i-1] != data[WADS][i]:
+                ws.cell(row=shares_outstanding_growth_idx, column=j).value =\
+                    f"=({colnum_string(j)}{shares_outstanding_idx}/{colnum_string(j-1)}{shares_outstanding_idx}-1)"
+                ws.cell(row=shares_outstanding_growth_idx, column=j).number_format = FORMAT_PERCENTAGE_00
 
             if data[WADS][i] is not None:
                 ws.cell(row=per_idx, column=j).value = f"={colnum_string(j)}{price_close_idx}/{colnum_string(j)}{epu_idx}"
