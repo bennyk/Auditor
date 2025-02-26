@@ -16,8 +16,8 @@ class CAGR:
 
     def calculate(self, idx):
         self.ws.cell(row=idx, column=self.j).value = \
-            (f"=(({colnum_string(self.j - 1)}{idx}/{colnum_string(self.start_idx)}{idx})"
-             f"^(1/COLUMNS({colnum_string(self.start_idx)}{idx}:{colnum_string(self.j - 1)}{idx}))-1)")
+            (f"=(({colnum_string(self.j-1)}{idx}/{colnum_string(self.start_idx)}{idx})"
+             f"^(1/COLUMNS({colnum_string(self.start_idx)}{idx}:{colnum_string(self.j-1)}{idx}))-1)")
         self.ws.cell(row=idx, column=self.j).number_format = FORMAT_PERCENTAGE_00
 
 
@@ -126,6 +126,7 @@ class ExcelSheet:
         dps_idx = self.add_row_idx()
         dps_sen_idx = self.add_row_idx()
         div_yield_idx = self.add_row_idx()
+        tsr_per_idx = self.add_row_idx()
 
         ws.cell(row=income_items_idx, column=1).value = "Income items / end of year"
         ws.cell(row=total_revenues_idx, column=1).value = "Total sales"
@@ -143,9 +144,11 @@ class ExcelSheet:
         ws.cell(row=per_idx, column=1).value = "PER"
         ws.cell(row=dps_idx, column=1).value = "Dividends per share"
         ws.cell(row=dps_sen_idx, column=1).value = "Dividends per share (sen)"
-        ws.cell(row=div_yield_idx, column=1).value = "Dividends yield %"
+        ws.cell(row=div_yield_idx, column=1).value = "% Dividends yield"
+        ws.cell(row=tsr_per_idx, column=1).value = "% TSR"
         # ws.cell(row=11, column=1).value = "Dividends payout rate %"
 
+        first_ffo_col = None
         data = self.data["Income"]
         for i in range(len(data[r'Income Statement | TIKR.com'])):
             ws.cell(row=income_items_idx, column=j).value = data[r'Income Statement | TIKR.com'][i]
@@ -207,11 +210,22 @@ class ExcelSheet:
             if data[WADS][i] is not None:
                 ws.cell(row=div_yield_idx, column=j).value = f"={colnum_string(j)}{dps_idx}/{colnum_string(j)}{price_close_idx}"
                 ws.cell(row=div_yield_idx, column=j).number_format = FORMAT_PERCENTAGE_00
+
+                if first_ffo_col is None:
+                    first_ffo_col = j
+                else:
+                    ws.cell(row=tsr_per_idx, column=j).value =\
+                        (f"=({colnum_string(j)}{price_close_idx} - {colnum_string(first_ffo_col)}{price_close_idx}"
+                         f"+ {colnum_string(j)}{dps_idx}) / {colnum_string(first_ffo_col)}{price_close_idx}")
+                    ws.cell(row=tsr_per_idx, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
 
-        # =(M2/D2)^(1/COLUMNS(D2:M2))-1
-        start_idx = j-9
+        # CAGR return
+        # Close value over initial value power to 1/periods. Formulaic below
+        #   =(close value/initial value)^(1/COLUMNS(initial:close))-1
+        # TODO temp fix for short term than 10 years
         # start_idx = j-11
+        start_idx = j-9
         ws.cell(row=1, column=j).value = "CAGR"
 
         cagr_cal = CAGR(ws, j, start_idx)
@@ -230,21 +244,27 @@ class ExcelSheet:
         ffo_idx = self.add_row_idx()
         ffo_per_share_idx = self.add_row_idx()
         p_over_ffo_idx = self.add_row_idx()
+        ffo_return_idx = self.add_row_idx()
 
         self.row_idx += 1
         affo_idx = self.add_row_idx()
         affo_per_share_idx = self.add_row_idx()
         p_over_affo_idx = self.add_row_idx()
+        affo_return_idx = self.add_row_idx()
 
         ws.cell(row=cash_items_idx, column=1).value = "Cash items / end of year"
         ws.cell(row=ffo_idx, column=1).value = "FFO"
         ws.cell(row=ffo_per_share_idx, column=1).value = "FFO per share"
         ws.cell(row=p_over_ffo_idx, column=1).value = "P/FFO per share"
+        ws.cell(row=ffo_return_idx, column=1).value = " % FFO per share return"
 
         ws.cell(row=affo_idx, column=1).value = "AFFO"
         ws.cell(row=affo_per_share_idx, column=1).value = "AFFO per share"
         ws.cell(row=p_over_affo_idx, column=1).value = "P/AFFO per share"
+        ws.cell(row=affo_return_idx, column=1).value = "  % AFFO per share return"
 
+        first_ffo_col = None
+        first_affo_col = None
         data = self.data["Cash"]
         for i in range(len(data[r'Cash Flow Statement | TIKR.com'])):
             ws.cell(row=cash_items_idx, column=j).value = data[r'Cash Flow Statement | TIKR.com'][i]
@@ -268,6 +288,13 @@ class ExcelSheet:
             ws.cell(row=p_over_ffo_idx, column=j).value = f"={colnum_string(j)}{price_close_idx} / {colnum_string(j)}{ffo_per_share_idx}"
             ws.cell(row=p_over_ffo_idx, column=j).number_format = FORMAT_NUMBER_00
 
+            if first_ffo_col is None:
+                first_ffo_col = j
+            else:
+                ws.cell(row=ffo_return_idx, column=j).value =\
+                    f"={colnum_string(j)}{ffo_per_share_idx} / {colnum_string(first_ffo_col)}{ffo_per_share_idx}-1"
+                ws.cell(row=ffo_return_idx, column=j).number_format = FORMAT_PERCENTAGE_00
+
             affo = ffo
             affo += data['Acquisition of Real Estate Assets'][i]
             ws.cell(row=affo_idx, column=j).value = affo
@@ -280,6 +307,13 @@ class ExcelSheet:
             ws.cell(row=p_over_affo_idx, column=j).value =\
                 f"={colnum_string(j)}{price_close_idx} / {colnum_string(j)}{affo_per_share_idx}"
             ws.cell(row=p_over_affo_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            if first_affo_col is None:
+                first_affo_col = j
+            else:
+                ws.cell(row=affo_return_idx, column=j).value = \
+                    f"={colnum_string(j)}{affo_per_share_idx} / {colnum_string(first_affo_col)}{affo_per_share_idx}-1"
+                ws.cell(row=affo_return_idx, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
 
         a = self.parse_header_year("Income")
