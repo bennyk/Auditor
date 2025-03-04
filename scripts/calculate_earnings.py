@@ -144,8 +144,8 @@ class ExcelSheet:
         ws.cell(row=net_income_idx, column=1).value = "Net income"
         ws.cell(row=adj_net_income_idx, column=1).value = "Adj. net income"
         ws.cell(row=adj_net_margin_idx, column=1).value = "  % Adj. net margin"
-        ws.cell(row=epu_idx, column=1).value = "Adj. EPU"
-        ws.cell(row=epu_sen_idx, column=1).value = "Adj. EPU (sen)"
+        ws.cell(row=epu_idx, column=1).value = "EPU"
+        ws.cell(row=epu_sen_idx, column=1).value = "EPU (sen)"
         ws.cell(row=epu_sen_growth_idx, column=1).value = "  % EPU change YoY"
         ws.cell(row=market_cap_idx, column=1).value = "Market Cap"
         ws.cell(row=price_close_idx, column=1).value = "Price Close"
@@ -194,7 +194,7 @@ class ExcelSheet:
             ws.cell(row=adj_net_margin_idx, column=j).number_format = FORMAT_PERCENTAGE_00
 
             if data[WADS][i] is not None:
-                ws.cell(row=epu_idx, column=j).value = f"={colnum_string(j)}{adj_net_income_idx}/{colnum_string(j)}{shares_outstanding_idx}"
+                ws.cell(row=epu_idx, column=j).value = f"={colnum_string(j)}{net_income_idx}/{colnum_string(j)}{shares_outstanding_idx}"
                 ws.cell(row=epu_idx, column=j).number_format = '0.0000'
 
                 ws.cell(row=epu_sen_idx, column=j).value = f"=100*{colnum_string(j)}{epu_idx}"
