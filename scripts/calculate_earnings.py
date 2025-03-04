@@ -52,6 +52,7 @@ class ExcelSheet:
         for row in range(1, income_sheet.max_row+1):
             self.extract_data(income_sheet, ['Income Statement | TIKR.com',
                                              r'Total Revenues',
+                                             r'Operating Income',
                                              r'Net Income',
                                              r'EBT Excl. Unusual Items',
                                              r'Weighted Average Diluted Shares Outstanding',
@@ -71,6 +72,7 @@ class ExcelSheet:
 
         for row in range(1, balance_sheet.max_row + 1):
             self.extract_data(balance_sheet, ['Balance Sheet | TIKR.com',
+                                              r'Total Real Estate Assets',
                                               r'Total Debt',
                                               r'Total Assets',
                                               ], "Balance")
@@ -112,6 +114,9 @@ class ExcelSheet:
         income_items_idx = self.add_row_idx()
         total_revenues_idx = self.add_row_idx()
         revenues_growth_idx = self.add_row_idx()
+        op_income_idx = self.add_row_idx()
+        op_income_changes_idx = self.add_row_idx()
+        op_margin_idx = self.add_row_idx()
         net_income_idx = self.add_row_idx()
         adj_net_income_idx = self.add_row_idx()
         adj_net_margin_idx = self.add_row_idx()
@@ -125,12 +130,17 @@ class ExcelSheet:
         per_idx = self.add_row_idx()
         dps_idx = self.add_row_idx()
         dps_sen_idx = self.add_row_idx()
+        div_payout_idx = self.add_row_idx()
         div_yield_idx = self.add_row_idx()
         tsr_per_idx = self.add_row_idx()
+        yield_on_cost = self.add_row_idx()
 
         ws.cell(row=income_items_idx, column=1).value = "Income items / end of year"
         ws.cell(row=total_revenues_idx, column=1).value = "Total sales"
         ws.cell(row=revenues_growth_idx, column=1).value = "  % Sales change YoY"
+        ws.cell(row=op_income_idx, column=1).value = "Operating Income"
+        ws.cell(row=op_income_changes_idx, column=1).value = "  % Change YoY"
+        ws.cell(row=op_margin_idx, column=1).value = "  % Op. Margins"
         ws.cell(row=net_income_idx, column=1).value = "Net income"
         ws.cell(row=adj_net_income_idx, column=1).value = "Adj. net income"
         ws.cell(row=adj_net_margin_idx, column=1).value = "  % Adj. net margin"
@@ -144,9 +154,10 @@ class ExcelSheet:
         ws.cell(row=per_idx, column=1).value = "PER"
         ws.cell(row=dps_idx, column=1).value = "Dividends per share"
         ws.cell(row=dps_sen_idx, column=1).value = "Dividends per share (sen)"
-        ws.cell(row=div_yield_idx, column=1).value = "% Dividends yield"
-        ws.cell(row=tsr_per_idx, column=1).value = "% TSR"
-        # ws.cell(row=11, column=1).value = "Dividends payout rate %"
+        ws.cell(row=div_payout_idx, column=1).value = "  % Payout"
+        ws.cell(row=div_yield_idx, column=1).value = "  % Dividends yield"
+        ws.cell(row=tsr_per_idx, column=1).value = "  % TSR"
+        ws.cell(row=yield_on_cost, column=1).value = "  % YoC"
 
         first_ffo_col = None
         data = self.data["Income"]
@@ -160,6 +171,17 @@ class ExcelSheet:
                 ws.cell(row=revenues_growth_idx, column=j).value =\
                     f"={colnum_string(j)}{total_revenues_idx}/{colnum_string(j-1)}{total_revenues_idx}-1"
                 ws.cell(row=revenues_growth_idx, column=j).number_format = FORMAT_PERCENTAGE_00
+
+            ws.cell(row=op_income_idx, column=j).value = data[r'Operating Income'][i]
+            ws.cell(row=op_income_idx, column=j).number_format = FORMAT_NUMBER_00
+
+            if i >= 1:
+                ws.cell(row=op_income_changes_idx, column=j).value =\
+                    f"={colnum_string(j)}{op_income_idx}/{colnum_string(j-1)}{op_income_idx}-1"
+                ws.cell(row=op_income_changes_idx, column=j).number_format = FORMAT_PERCENTAGE_00
+
+            ws.cell(row=op_margin_idx, column=j).value = f"={colnum_string(j)}{op_income_idx}/{colnum_string(j)}{total_revenues_idx}"
+            ws.cell(row=op_margin_idx, column=j).number_format = FORMAT_PERCENTAGE_00
 
             ws.cell(row=net_income_idx, column=j).value = data[r'Net Income'][i]
             ws.cell(row=net_income_idx, column=j).number_format = FORMAT_NUMBER_00
@@ -208,6 +230,10 @@ class ExcelSheet:
             ws.cell(row=dps_sen_idx, column=j).number_format = FORMAT_NUMBER_00
 
             if data[WADS][i] is not None:
+                ws.cell(row=div_payout_idx, column=j).value =\
+                    f"={colnum_string(j)}{dps_idx}/{colnum_string(j)}{epu_idx}"
+                ws.cell(row=div_payout_idx, column=j).number_format = FORMAT_PERCENTAGE_00
+
                 ws.cell(row=div_yield_idx, column=j).value = f"={colnum_string(j)}{dps_idx}/{colnum_string(j)}{price_close_idx}"
                 ws.cell(row=div_yield_idx, column=j).number_format = FORMAT_PERCENTAGE_00
 
@@ -218,6 +244,11 @@ class ExcelSheet:
                         (f"=({colnum_string(j)}{price_close_idx} - {colnum_string(first_ffo_col)}{price_close_idx}"
                          f"+ {colnum_string(j)}{dps_idx}) / {colnum_string(first_ffo_col)}{price_close_idx}")
                     ws.cell(row=tsr_per_idx, column=j).number_format = FORMAT_PERCENTAGE_00
+
+                # print(f"{self.data['Balance']['Total Real Estate Assets'][i-2]}")
+                ws.cell(row=yield_on_cost, column=j).value =\
+                    f"={colnum_string(j)}{op_income_idx}/{self.data['Balance']['Total Real Estate Assets'][i-2]}"
+                ws.cell(row=yield_on_cost, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
 
         # CAGR return
@@ -340,6 +371,7 @@ def main():
     del out_wb['Sheet']
 
     for name in ['kipreit', 'igbreit', 'klcc', 'sunreit', 'axreit']:
+        print(name)
         sheet.parse_statement(name)
         sheet.write(out_wb, name)
     out_wb.save(f"xyz_report.xlsx")
@@ -355,5 +387,7 @@ if __name__ == "__main__":
 # 3. Pick up end-of-year items when tabulating shares outstanding (WADSO).
 #    TIKR uses an average of outstanding shares instead, leading to a pessimistic/overvaluation when trading.
 # 4. Does the calculated DPU (1.544 sen) not match the reported 1.66 sen?
+# 5. YoC and % payout
+# 6. Use original EPS
 
 
