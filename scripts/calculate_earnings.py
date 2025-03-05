@@ -2,6 +2,7 @@ import re
 from typing import List
 
 from openpyxl import load_workbook, Workbook
+from openpyxl.styles import PatternFill
 from openpyxl.styles.numbers import FORMAT_NUMBER_00, FORMAT_PERCENTAGE_00
 from utils import colnum_string, list_over_list
 
@@ -107,6 +108,11 @@ class ExcelSheet:
         ws = out_wb.create_sheet(title)
         self.row_idx = 0
 
+        # https://stackoverflow.com/questions/25588918/how-to-freeze-entire-header-row-in-openpyxl
+        c = ws['B2']
+        ws.freeze_panes = c
+        fill = PatternFill(start_color="e1e1ebe7", end_color="e1e1ebe7", fill_type="solid")
+
         WADS = r'Weighted Average Diluted Shares Outstanding'
         ws.column_dimensions["A"].width = 25
 
@@ -135,6 +141,7 @@ class ExcelSheet:
         tsr_per_idx = self.add_row_idx()
         yield_on_cost = self.add_row_idx()
 
+        ws.cell(row=1, column=1).fill = fill
         ws.cell(row=income_items_idx, column=1).value = "Income items / end of year"
         ws.cell(row=total_revenues_idx, column=1).value = "Total sales"
         ws.cell(row=revenues_growth_idx, column=1).value = "  % Sales change YoY"
@@ -162,6 +169,7 @@ class ExcelSheet:
         first_ffo_col = None
         data = self.data["Income"]
         for i in range(len(data[r'Income Statement | TIKR.com'])):
+            ws.cell(row=1, column=j).fill = fill
             ws.cell(row=income_items_idx, column=j).value = data[r'Income Statement | TIKR.com'][i]
 
             ws.cell(row=total_revenues_idx, column=j).value = data[r'Total Revenues'][i]
@@ -223,13 +231,12 @@ class ExcelSheet:
                 ws.cell(row=per_idx, column=j).value = f"={colnum_string(j)}{price_close_idx}/{colnum_string(j)}{epu_idx}"
                 ws.cell(row=per_idx, column=j).number_format = FORMAT_NUMBER_00
 
-            ws.cell(row=dps_idx, column=j).value = data[r'Dividends per share'][i] if data[r'Dividends per share'][i] is not None else ''
-            ws.cell(row=dps_idx, column=j).number_format = '0.0000'
+                ws.cell(row=dps_idx, column=j).value = data[r'Dividends per share'][i] if data[r'Dividends per share'][i] is not None else ''
+                ws.cell(row=dps_idx, column=j).number_format = '0.0000'
 
-            ws.cell(row=dps_sen_idx, column=j).value = f"=100*{colnum_string(j)}{dps_idx}"
-            ws.cell(row=dps_sen_idx, column=j).number_format = FORMAT_NUMBER_00
+                ws.cell(row=dps_sen_idx, column=j).value = f"=100*{colnum_string(j)}{dps_idx}"
+                ws.cell(row=dps_sen_idx, column=j).number_format = FORMAT_NUMBER_00
 
-            if data[WADS][i] is not None:
                 ws.cell(row=div_payout_idx, column=j).value =\
                     f"={colnum_string(j)}{dps_idx}/{colnum_string(j)}{epu_idx}"
                 ws.cell(row=div_payout_idx, column=j).number_format = FORMAT_PERCENTAGE_00
@@ -250,6 +257,7 @@ class ExcelSheet:
                     f"={colnum_string(j)}{op_income_idx}/{self.data['Balance']['Total Real Estate Assets'][i-2]}"
                 ws.cell(row=yield_on_cost, column=j).number_format = FORMAT_PERCENTAGE_00
             j += 1
+        ws.cell(row=1, column=j).fill = fill
 
         # CAGR return
         # Close value over initial value power to 1/periods. Formulaic below
@@ -283,6 +291,7 @@ class ExcelSheet:
         p_over_affo_idx = self.add_row_idx()
         affo_return_idx = self.add_row_idx()
 
+        ws.cell(row=cash_items_idx, column=1).fill = fill
         ws.cell(row=cash_items_idx, column=1).value = "Cash items / end of year"
         ws.cell(row=ffo_idx, column=1).value = "FFO"
         ws.cell(row=ffo_per_share_idx, column=1).value = "FFO per share"
@@ -298,6 +307,7 @@ class ExcelSheet:
         first_affo_col = None
         data = self.data["Cash"]
         for i in range(len(data[r'Cash Flow Statement | TIKR.com'])):
+            ws.cell(row=cash_items_idx, column=j).fill = fill
             ws.cell(row=cash_items_idx, column=j).value = data[r'Cash Flow Statement | TIKR.com'][i]
 
             ffo = data['Net Income'][i]
@@ -354,10 +364,12 @@ class ExcelSheet:
         balance_items_idx = self.add_row_idx()
         debt_to_assets_idx = self.add_row_idx()
 
+        ws.cell(row=balance_items_idx, column=1).fill = fill
         ws.cell(row=balance_items_idx, column=1).value = "Balance items / end of year"
         ws.cell(row=debt_to_assets_idx, column=1).value = "Debt to Assets %"
         data = self.data["Balance"]
         for i in range(len(data[r'Balance Sheet | TIKR.com'])):
+            ws.cell(row=balance_items_idx, column=j).fill = fill
             ws.cell(row=balance_items_idx, column=j).value = data[r'Balance Sheet | TIKR.com'][i]
 
             ws.cell(row=debt_to_assets_idx, column=j).value = data["Total Debt"][i] / data["Total Assets"][i]
